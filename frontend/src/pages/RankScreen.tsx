@@ -57,11 +57,6 @@ export const RankScreen: React.FC = () => {
 
   const fetchLeaderboard = async () => {
     try {
-      if (currentTab !== 'overall') {
-        // NOTE: 因應黑客松展示，針對非綜合排名直接給予精心設計的差異化假資料
-        setLeaderboard(FALLBACK_DATA[currentTab] ?? FALLBACK_DATA.overall);
-        return;
-      }
       const res = await apiClient.get('/api/v1/leaderboard', {
         params: { category: currentTab }
       });

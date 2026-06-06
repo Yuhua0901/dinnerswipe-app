@@ -613,28 +613,88 @@ def recommend(
 
 @app.get("/leaderboard", summary="取得全區食物熱度榜（Top 50）")
 def leaderboard(
+    category: Optional[str] = "overall",
     zone: Optional[str] = None,
     limit: int = 50,
+    me: User = Depends(current_user),
     db: Session = Depends(get_db)
 ):
-    # NOTE: 主排序以 score（熱度分數）降序，同分時以 total_swipes（互動人數）作為第二鍵，
-    # 避免「3 人全心喜歡」排在「1 人全心喜歡」後面的問題
-    q = db.query(FoodScore).order_by(FoodScore.score.desc(), FoodScore.total_swipes.desc())
+    # 處理綜合排行榜（使用預先計算的 FoodScore 提升效能）
+    if category == "overall":
+        q = db.query(FoodScore).order_by(FoodScore.score.desc(), FoodScore.total_swipes.desc())
+        if zone:
+            q = q.filter(FoodScore.food_zone == zone)
+        rows = q.limit(min(limit, 200)).all()
+        return {"leaderboard": [
+            {
+                "rank"        : i+1,
+                "food_name"   : r.food_name,
+                "food_zone"   : r.food_zone,
+                "score"       : r.score,
+                "total_right" : r.total_right + r.total_heart,
+                "total_left"  : r.total_left,
+                "heart_rate"  : round(r.total_heart / max(r.total_swipes,1) * 100, 1),
+            }
+            for i, r in enumerate(rows)
+        ]}
+
+    # 其他動態排行榜（直接從 Swipe 表進行統計）
+    from sqlalchemy import case, func as sqlfunc
+    
+    q = db.query(
+        Swipe.food_name, Swipe.food_zone,
+        sqlfunc.count(Swipe.id).label("total"),
+        sqlfunc.sum(case((Swipe.action.in_(["right", "heart"]), 1), else_=0)).label("pos"),
+        sqlfunc.sum(case((Swipe.action == "heart", 1), else_=0)).label("hearts")
+    )
+
+    if category == "personal":
+        q = q.filter(Swipe.user_id == me.id)
+    elif category == "heal":
+        q = q.filter(Swipe.mood_context.like("%疲憊求療癒%"))
+    elif category == "group":
+        q = q.filter(Swipe.mood_context.like("%想找人揪%"))
+    elif category == "solo":
+        q = q.filter(Swipe.mood_context.like("%一個人%"))
+    elif category == "healthy":
+        q = q.filter(Swipe.mood_context.like("%健康優先%"))
+
     if zone:
-        q = q.filter(FoodScore.food_zone == zone)
-    rows = q.limit(min(limit, 200)).all()
-    return {"leaderboard": [
-        {
-            "rank"        : i+1,
-            "food_name"   : r.food_name,
-            "food_zone"   : r.food_zone,
-            "score"       : r.score,
-            "total_right" : r.total_right + r.total_heart,
-            "total_left"  : r.total_left,
-            "heart_rate"  : round(r.total_heart / max(r.total_swipes,1) * 100, 1),
-        }
-        for i, r in enumerate(rows)
-    ]}
+        q = q.filter(Swipe.food_zone == zone)
+
+    q = q.group_by(Swipe.food_name, Swipe.food_zone)
+    rows = q.all()
+
+    results = []
+    for r in rows:
+        total = r.total or 0
+        pos = r.pos or 0
+        hearts = r.hearts or 0
+        if total < 1: continue
+
+        # 動態計分機制
+        base_score = (pos * 1.0 + hearts * 1.5) / total * 100
+        score = round(min(base_score, 100), 1)
+        sort_key = pos * 2 + hearts * 3 # 使用正向互動數作為排序主鍵
+
+        results.append({
+            "food_name": r.food_name,
+            "food_zone": r.food_zone or "未分類",
+            "score": score,
+            "total_right": pos,
+            "total_left": total - pos,
+            "heart_rate": round(hearts / total * 100, 1),
+            "sort_key": sort_key
+        })
+
+    results.sort(key=lambda x: (x["sort_key"], x["score"]), reverse=True)
+    results = results[:limit]
+
+    for i, r in enumerate(results):
+        r["rank"] = i + 1
+        del r["sort_key"]
+        
+    return {"leaderboard": results}
 
 
 @app.get("/user/{user_id}/profile", summary="取得某使用者的口味分析")
