@@ -41,8 +41,8 @@ import bcrypt
 from jose import jwt, JWTError
 
 # ── Config ────────────────────────────────────────────────────────────────────
-# 優先讀取環境變數中的 DATABASE_URL，若無則使用本機 SQLite
-DB_URL       = os.getenv("DATABASE_URL", "sqlite:///./dinnerswipe.db")
+# 優先讀取環境變數中的 DATABASE_URL，若無則使用本機 SQLite 或預設的 Supabase
+DB_URL       = os.getenv("DATABASE_URL", "postgresql://postgres:Yuhua0901yuhua@db.zxljuhdqheiktqrlkfnr.supabase.co:5432/postgres")
 
 # SQLAlchemy 1.4+ 要求 postgresql:// 而不是 postgres://
 if DB_URL.startswith("postgres://"):
