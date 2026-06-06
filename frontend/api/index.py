@@ -1,10 +1,3 @@
-import sys
-import os
-
-# 將專案根目錄加到 sys.path 中，這樣才能 import 到上層的 DinnerSwipe_Backend.py
-# 現在我們在 frontend/api/index.py，所以要往上一層
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../'))
-
 from fastapi import FastAPI
 from DinnerSwipe_Backend import app as backend_app
 
