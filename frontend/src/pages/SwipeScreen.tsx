@@ -63,7 +63,12 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
       setShowMoodModal(true);
       generateRandomFoods(false);
     } else {
-      generateRandomFoods(true);
+      const savedTagsStr = localStorage.getItem('today_mood_tags');
+      const savedTags = savedTagsStr ? JSON.parse(savedTagsStr) : null;
+      if (savedTags) {
+        setMoodTags(savedTags);
+      }
+      generateRandomFoods(true, savedTags);
     }
   }, []);
 
@@ -115,7 +120,7 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
   };
 
 
-  const generateRandomFoods = (shouldStartSession = true) => {
+  const generateRandomFoods = (shouldStartSession = true, savedMoods?: string[]) => {
     const shuffled = [...ALL_FOODS].sort(() => 0.5 - Math.random());
     const selected = shuffled.slice(0, 15).map(name => ({
       name,
@@ -125,7 +130,7 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
     }));
     setFoods(selected);
     if (shouldStartSession) {
-      startSession();
+      startSession(savedMoods);
     }
   };
 
@@ -141,6 +146,7 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
   const handleMoodSelect = (mood: string) => {
     setMoodTags([mood]);
     localStorage.setItem('today_mood_date', new Date().toDateString());
+    localStorage.setItem('today_mood_tags', JSON.stringify([mood]));
     setShowMoodModal(false);
     startSession([mood]);
   };
@@ -279,8 +285,8 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
               className={`mood-pill ${moodTags.includes(m) ? 'sel' : ''}`}
               onClick={() => {
                 setMoodTags([m]);
-                // 也讓這裡點選時更新日期，避免今天之後再彈出
                 localStorage.setItem('today_mood_date', new Date().toDateString());
+                localStorage.setItem('today_mood_tags', JSON.stringify([m]));
               }}
             >
               {m}
