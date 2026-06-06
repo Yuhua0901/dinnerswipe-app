@@ -64,6 +64,15 @@ Base    = declarative_base()
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 app     = FastAPI(title="DinnerSwipe API", version="1.0.0")
 
+from fastapi.responses import JSONResponse
+import traceback
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Runtime Error: {str(exc)}", "traceback": traceback.format_exc()}
+    )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],   # 正式部署改成你的前端 domain
