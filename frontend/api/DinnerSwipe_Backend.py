@@ -160,7 +160,10 @@ def hash_pw(pw: str) -> str:
     return pwd_ctx.hash(pw)
 
 def verify_pw(pw: str, hashed: str) -> bool:
-    return pwd_ctx.verify(pw, hashed)
+    # bcrypt 限制密碼最多 72 bytes，若超過直接截斷，避免 Server Crash
+    pw_bytes = pw.encode('utf-8')[:72]
+    safe_pw = pw_bytes.decode('utf-8', 'ignore')
+    return pwd_ctx.verify(safe_pw, hashed)
 
 def make_token(user_id: int) -> str:
     exp = datetime.utcnow() + timedelta(days=TOKEN_EXPIRE)
