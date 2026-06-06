@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// 假設開發環境 FastAPI 跑在 8000 port
-const API_BASE_URL = 'http://localhost:8000';
+// 優先讀取環境變數 VITE_API_URL（供 Vercel 部署使用），若無則使用本機開發環境
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
