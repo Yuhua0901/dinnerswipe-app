@@ -61,7 +61,6 @@ else:
 
 Session_ = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base    = declarative_base()
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 app     = FastAPI(title="DinnerSwipe API", version="1.0.0")
 
 from fastapi.responses import JSONResponse
@@ -157,13 +156,16 @@ def get_db():
         db.close()
 
 def hash_pw(pw: str) -> str:
-    return pwd_ctx.hash(pw)
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pw.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
 def verify_pw(pw: str, hashed: str) -> bool:
-    # bcrypt 限制密碼最多 72 bytes，若超過直接截斷，避免 Server Crash
-    pw_bytes = pw.encode('utf-8')[:72]
-    safe_pw = pw_bytes.decode('utf-8', 'ignore')
-    return pwd_ctx.verify(safe_pw, hashed)
+    try:
+        pw_bytes = pw.encode('utf-8')[:72]
+        return bcrypt.checkpw(pw_bytes, hashed.encode('utf-8'))
+    except Exception:
+        return False
 
 def make_token(user_id: int) -> str:
     exp = datetime.utcnow() + timedelta(days=TOKEN_EXPIRE)
