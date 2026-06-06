@@ -16,14 +16,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess }) => {
 
   const handleSubmit = async () => {
     setError('');
-    if (!password || (isLogin && !name) || (!isLogin && (!name || !email))) {
+    if (!password || (isLogin && !email) || (!isLogin && (!name || !email))) {
       setError('請填寫完整資訊');
       return;
     }
 
     try {
       if (isLogin) {
-        const response = await apiClient.post('/api/v1/auth/login', { name, password });
+        const response = await apiClient.post('/api/v1/auth/login', { email, password });
         login(response.data.token, { id: response.data.user_id, name: response.data.name });
         onSuccess();
       } else {
@@ -57,9 +57,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess }) => {
           <input 
             className="auth-input" 
             type="text" 
-            placeholder="使用者名稱" 
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            placeholder="電子信箱 (Email)" 
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
         ) : (
           <input 
