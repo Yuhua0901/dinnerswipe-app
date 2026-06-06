@@ -18,6 +18,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
   const [persona, setPersona] = useState<PersonaData>({ emoji: '🍜', title: '深夜療癒食客', desc: '疲憊的夜晚，一碗熱湯就是最好的擁抱' });
   const [soulmateCount, setSoulmateCount] = useState(0);
 
+  const formatTimeAgo = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffHours = (now.getTime() - d.getTime()) / (1000 * 60 * 60);
+    if (diffHours < 24) return '今天';
+    if (diffHours < 48) return '昨天';
+    return `${Math.floor(diffHours / 24)}天前`;
+  };
+
   useEffect(() => {
     if (user?.id) {
       fetchProfile();
@@ -172,23 +181,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
 
       <div className="hist-sec">
         <div className="hist-t">近期決定紀錄</div>
-        {/* Placeholder data for history */}
-        <div className="hist-row">
-          <div className="he">🍜</div>
-          <div className="hi">
-            <div className="hn">老字號雞湯麵</div>
-            <div className="ht">昨天</div>
+        {profileData?.recent_decisions?.length > 0 ? (
+          profileData.recent_decisions.map((dec: any, idx: number) => (
+            <div key={idx} className="hist-row">
+              <div className="he">🍽️</div>
+              <div className="hi">
+                <div className="hn">{dec.food_name}</div>
+                <div className="ht">{formatTimeAgo(dec.swiped_at)}</div>
+              </div>
+              <div className={`hlabel ${dec.action === 'heart' ? 'h' : 'm'}`}>
+                {dec.action === 'heart' ? '療癒十足' : (dec.mood_context ? dec.mood_context.split(',')[0] : '符合心情')}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-s)', fontSize: '14px' }}>
+            尚無近期決定紀錄，快去首頁滑卡吧！
           </div>
-          <div className="hlabel m">符合心情</div>
-        </div>
-        <div className="hist-row">
-          <div className="he">🍲</div>
-          <div className="hi">
-            <div className="hn">麻辣鴛鴦鍋</div>
-            <div className="ht">3天前</div>
-          </div>
-          <div className="hlabel h">療癒十足</div>
-        </div>
+        )}
       </div>
 
       <div style={{ padding: '0 22px 24px' }}>

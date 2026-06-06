@@ -725,6 +725,22 @@ def user_profile(
 
     # NOTE: 功能1 - 動態計算晚餐人格
     persona = compute_dinner_persona(swipes)
+    
+    # 近期決定紀錄 (取最近 3 筆 heart 或是 right 的)
+    recent_swipes = db.query(Swipe).filter(
+        Swipe.user_id == user_id, 
+        Swipe.action.in_(["heart", "right"])
+    ).order_by(Swipe.swiped_at.desc()).limit(3).all()
+    
+    recent_decisions = []
+    for sw in recent_swipes:
+        # 簡單判斷時間，這裡只回傳字串或格式化時間
+        recent_decisions.append({
+            "food_name": sw.food_name,
+            "action": sw.action,
+            "mood_context": sw.mood_context,
+            "swiped_at": sw.swiped_at.isoformat()
+        })
 
     return {
         "total_swipes"   : len(swipes),
@@ -733,6 +749,7 @@ def user_profile(
         "top_foods"      : dict(sorted(top_foods.items(), key=lambda x: -x[1])[:20]),
         "reputation"     : me.reputation,
         "persona"        : persona,
+        "recent_decisions": recent_decisions
     }
 
 # ── 功能2：路人溫暖推薦 ──────────────────────────────────────────────────────
