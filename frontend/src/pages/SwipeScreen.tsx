@@ -28,7 +28,8 @@ const ALL_FOODS = [
 export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = false, showToast, onResetSwipeCount }) => {
   const [foods, setFoods] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [moodTags, setMoodTags] = useState<string[]>(['的一個人']); // Default
+  const defaultMoods = ['一個人', '疲憊求療癒', '想找人揪', '犒賞自己', '健康優先'];
+  const [moodTags, setMoodTags] = useState<string[]>([defaultMoods[Math.floor(Math.random() * defaultMoods.length)]]);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [swipes, setSwipes] = useState<any[]>([]);
   const [animClass, setAnimClass] = useState('');
