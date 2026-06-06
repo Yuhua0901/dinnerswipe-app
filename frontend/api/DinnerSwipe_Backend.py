@@ -441,7 +441,9 @@ def leaderboard(
     limit: int = 50,
     db: Session = Depends(get_db)
 ):
-    q = db.query(FoodScore).order_by(FoodScore.score.desc())
+    # NOTE: 主排序以 score（熱度分數）降序，同分時以 total_swipes（互動人數）作為第二鍵，
+    # 避免「3 人全心喜歡」排在「1 人全心喜歡」後面的問題
+    q = db.query(FoodScore).order_by(FoodScore.score.desc(), FoodScore.total_swipes.desc())
     if zone:
         q = q.filter(FoodScore.food_zone == zone)
     rows = q.limit(min(limit, 200)).all()
