@@ -37,7 +37,7 @@ from sqlalchemy import (
     DateTime, Text, ForeignKey, Index
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
-from passlib.context import CryptContext
+import bcrypt
 from jose import jwt, JWTError
 
 # ── Config ────────────────────────────────────────────────────────────────────
