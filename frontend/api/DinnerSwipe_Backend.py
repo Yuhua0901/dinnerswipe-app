@@ -435,6 +435,9 @@ class RegisterReq(BaseModel):
     region: Optional[str] = "台南市東區"
     avatar_base64: Optional[str] = ""
 
+class UpdateAvatarReq(BaseModel):
+    avatar_base64: str
+
 class LoginReq(BaseModel):
     email: str
     password: str
@@ -495,6 +498,16 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
         "reputation": user.reputation, "created_at": user.created_at,
         "avatar": user.avatar_base64,
     }
+
+@app.post("/auth/me/avatar", summary="更新自己的大頭照")
+def update_avatar(
+    req: UpdateAvatarReq,
+    me: User = Depends(current_user),
+    db: Session = Depends(get_db)
+):
+    me.avatar_base64 = req.avatar_base64
+    db.commit()
+    return {"ok": True, "avatar": me.avatar_base64}
 
 # ── Swipe Session Endpoints ───────────────────────────────────────────────────
 @app.post("/session/start", summary="開始一次 15 張刷卡場次")

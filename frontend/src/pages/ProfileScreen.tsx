@@ -13,7 +13,7 @@ interface PersonaData {
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount = 0 }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, fetchUser } = useAuth();
   const [profileData, setProfileData] = useState<any>(null);
   const [persona, setPersona] = useState<PersonaData>({ emoji: '🍜', title: '深夜療癒食客', desc: '疲憊的夜晚，一碗熱湯就是最好的擁抱' });
   const [soulmateCount, setSoulmateCount] = useState(0);
@@ -54,10 +54,70 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
     logout();
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const maxSize = 150;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxSize) {
+            height *= maxSize / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width *= maxSize / height;
+            height = maxSize;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64 = canvas.toDataURL('image/jpeg', 0.8);
+          try {
+            await apiClient.post('/api/v1/auth/me/avatar', { avatar_base64: base64 });
+            fetchUser(); // 重新抓取 user 資料更新畫面
+          } catch (err) {
+            console.error('上傳大頭照失敗', err);
+            alert('上傳大頭照失敗');
+          }
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="screen active" style={{ display: 'flex' }}>
       <div className="profile-hero">
-        <div className="av-ring">{user?.name ? user.name.charAt(0) : '😴'}</div>
+        <div 
+          className="av-ring" 
+          style={{ position: 'relative', cursor: 'pointer', overflow: 'hidden', padding: user?.avatar ? 0 : undefined }} 
+          onClick={() => document.getElementById('avatar-upload-input')?.click()}
+        >
+          {user?.avatar ? <img src={user.avatar} alt="avatar" style={{width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%'}} /> : (user?.name ? user.name.charAt(0) : '😴')}
+          
+          <input 
+            id="avatar-upload-input" 
+            type="file" 
+            accept="image/*" 
+            style={{ display: 'none' }} 
+            onChange={handleImageUpload} 
+          />
+          <div style={{ position: 'absolute', bottom: '0', right: '50%', transform: 'translateX(50%)', background: 'rgba(0,0,0,0.5)', width: '100%', textAlign: 'center', fontSize: '10px', color: '#fff', padding: '2px 0' }}>編輯</div>
+        </div>
         <div className="p-name">{user?.name || '使用者'}</div>
         {/* NOTE: 功能1 - 動態晚餐人格標籤 */}
         <div className="p-badge">{persona.emoji} {persona.title}</div>
@@ -83,7 +143,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
       <div className="pref-sec">
         <div className="psec-t">最愛餐點區域</div>
         <div className="pref-grid">
-          {profileData?.zone_preference ? (
+          {profileData?.zone_preference && Object.keys(profileData.zone_preference).length > 0 ? (
             Object.keys(profileData.zone_preference).map((zone, idx) => (
               <div key={zone} className={`pchip ${idx < 2 ? 'hot' : ''}`}>
                 {idx === 0 ? '🔥 ' : ''}{zone}
@@ -91,8 +151,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
             ))
           ) : (
             <>
-              <div className="pchip hot">🔥 台南市東區</div>
-              <div className="pchip">中西區</div>
+              <div className="pchip hot" style={{color: 'var(--text-s)', background: 'transparent', border: '1px dashed var(--warm2)'}}>尚無點餐紀錄</div>
             </>
           )}
         </div>
