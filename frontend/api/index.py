@@ -1,7 +1,14 @@
 from fastapi import FastAPI
-from DinnerSwipe_Backend import app as backend_app
+from fastapi.responses import JSONResponse
+import traceback
 
-# 建立一個外層 app 並將原本的後端掛載在 /api/v1 路徑下
-# 這是為了讓前端發送的 /api/v1/... 請求能正確對應到後端的 /...
 app = FastAPI()
-app.mount("/api/v1", backend_app)
+
+try:
+    from DinnerSwipe_Backend import app as backend_app
+    app.mount("/api/v1", backend_app)
+except Exception as e:
+    error_msg = traceback.format_exc()
+    @app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE"])
+    def catch_all(path_name: str):
+        return JSONResponse(status_code=500, content={"error": "Backend Import Failed", "traceback": error_msg})
