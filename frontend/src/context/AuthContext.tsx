@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { apiClient } from '../api/client';
+import { apiClient, getSafeToken, setClientToken } from '../api/client';
 
 interface User {
   id: number;
@@ -24,8 +24,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('dinnerswipe_token'));
+  const [token, setToken] = useState<string | null>(getSafeToken());
   const [isLoading, setIsLoading] = useState(true);
+
+  // 初始化時將已有 Token 同步寫入 Axios Defaults Headers，防範 In-App 瀏覽器載入延遲
+  useEffect(() => {
+    const initToken = getSafeToken();
+    if (initToken) {
+      setClientToken(initToken);
+    }
+  }, []);
 
   const fetchUser = async () => {
     if (!token) {
@@ -57,13 +65,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [token]);
 
   const login = (newToken: string, userData: any) => {
-    localStorage.setItem('dinnerswipe_token', newToken);
+    setClientToken(newToken);
     setToken(newToken);
     setUser(userData);
   };
 
   const logout = () => {
-    localStorage.removeItem('dinnerswipe_token');
+    setClientToken(null);
     setToken(null);
     setUser(null);
   };
@@ -82,3 +90,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

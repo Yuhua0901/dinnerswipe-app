@@ -11,9 +11,47 @@ export const apiClient = axios.create({
   },
 });
 
+// NOTE: 記憶體 Token 快取，作為手機端/無痕模式 localStorage 被禁用時的防禦性 fallback
+let memoryToken: string | null = null;
+
+/**
+ * 安全地讀取 localStorage 中的 token
+ */
+export const getSafeToken = (): string | null => {
+  if (memoryToken) return memoryToken;
+  try {
+    return localStorage.getItem('dinnerswipe_token');
+  } catch (e) {
+    console.warn('無法讀取 localStorage 中的 token:', e);
+    return null;
+  }
+};
+
+/**
+ * 同步更新 Axios Headers 與本地儲存/記憶體快取
+ */
+export const setClientToken = (token: string | null) => {
+  memoryToken = token;
+  if (token) {
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    try {
+      localStorage.setItem('dinnerswipe_token', token);
+    } catch (e) {
+      console.warn('無法寫入 token 到 localStorage:', e);
+    }
+  } else {
+    delete apiClient.defaults.headers.common['Authorization'];
+    try {
+      localStorage.removeItem('dinnerswipe_token');
+    } catch (e) {
+      console.warn('無法從 localStorage 清除 token:', e);
+    }
+  }
+};
+
 // 自動攔截 Request 加上 JWT Token
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('dinnerswipe_token');
+  const token = getSafeToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -27,8 +65,9 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
-      localStorage.removeItem('dinnerswipe_token');
+      setClientToken(null);
     }
     return Promise.reject(error);
   }
 );
+
