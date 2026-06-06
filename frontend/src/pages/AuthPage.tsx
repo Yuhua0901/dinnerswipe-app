@@ -95,8 +95,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess }) => {
         
         <div className="auth-divider">或</div>
         <div className="auth-social">
-          <button className="auth-social-btn">🍎 Apple</button>
-          <button className="auth-social-btn">🔵 Google</button>
+          <button className="auth-social-btn" onClick={() => alert('【期末專案展示】第三方登入功能開發中，請使用一般註冊！')}>🍎 Apple</button>
+          <button className="auth-social-btn" onClick={() => alert('【期末專案展示】第三方登入功能開發中，請使用一般註冊！')}>🔵 Google</button>
         </div>
       </div>
       
