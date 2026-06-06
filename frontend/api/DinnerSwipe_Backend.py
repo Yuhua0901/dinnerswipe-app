@@ -768,12 +768,24 @@ def warm_recommendations(
             for r in rows
         ]
     else:
-        # fallback：沒有足夠資料時顯示預設推薦
-        recommendations = [
-            {"food_name": "老字號雞湯麵", "supporter_count": 12, "message": "12 位路人在心情低落時選擇了一碗暖心雞湯麵 🫂"},
-            {"food_name": "紅豆湯圓", "supporter_count": 8, "message": "8 位路人推薦甜甜的紅豆湯圓療癒你的心 🫂"},
-            {"food_name": "薑母鴨暖鍋", "supporter_count": 6, "message": "6 位路人推薦用薑母鴨溫暖這個夜晚 🫂"},
+        # fallback：沒有足夠資料時動態生成預設推薦，營造社群活絡感
+        import random
+        comfort_foods = [
+            "老字號雞湯麵", "紅豆湯圓", "薑母鴨暖鍋", "熱巧克力", "豚骨拉麵", 
+            "炸雞唐揚", "麻辣火鍋", "草莓蛋糕", "日式厚鬆餅", "熱紅酒燉牛肉", 
+            "海鮮粥", "奶油蘑菇濃湯", "香煎鮭魚", "黑糖珍珠鮮奶", "抹茶拿鐵"
         ]
+        
+        # 為了產生「隨時間變動」的錯覺，可以加入一點隨機數
+        selected_foods = random.sample(comfort_foods, 3)
+        recommendations = []
+        for food in selected_foods:
+            count = random.randint(5, 35)
+            recommendations.append({
+                "food_name": food,
+                "supporter_count": count,
+                "message": f"{count} 位路人在心情低落時選擇了{food} 🫂"
+            })
 
     return {"mood": mood, "recommendations": recommendations}
 
