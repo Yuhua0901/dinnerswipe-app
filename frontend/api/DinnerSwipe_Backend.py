@@ -48,7 +48,7 @@ DB_URL       = os.getenv("DATABASE_URL", "sqlite:///./dinnerswipe.db")
 if DB_URL.startswith("postgres://"):
     DB_URL = DB_URL.replace("postgres://", "postgresql://", 1)
 
-SECRET_KEY   = os.getenv("DS_SECRET", secrets.token_hex(32))
+SECRET_KEY   = os.getenv("DS_SECRET", "dinner-swipe-fixed-fallback-secret-key-2024")
 ALGORITHM    = "HS256"
 TOKEN_EXPIRE = 30  # days
 ADMIN_TOKEN  = os.getenv("DS_ADMIN", "dinnerswipe-admin-2024")
