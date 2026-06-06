@@ -157,13 +157,17 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
 
       if (sessionId) {
         try {
-          await apiClient.post('/api/v1/session/submit', {
+          const res = await apiClient.post('/api/v1/session/submit', {
             session_id: sessionId,
             swipes: [newSwipe],
             mood_tags: moodTags
           });
           
-          if (action === 'heart' || action === 'right') {
+          // NOTE: 功能3 - 影響力數據回饋，優先顯示後端計算的排名變化通知
+          const impacts = res.data?.impact_messages || [];
+          if (impacts.length > 0) {
+            showToast?.(impacts[0]);
+          } else if (action === 'heart' || action === 'right') {
             showToast?.('你的選擇影響了區域熱度榜！');
           }
         } catch (e) {

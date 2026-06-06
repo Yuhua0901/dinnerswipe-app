@@ -301,3 +301,27 @@ body {
 .auth-page > *:nth-child(5) { animation-delay: .20s; }
 .auth-page > *:nth-child(6) { animation-delay: .25s; }
 .auth-page > *:nth-child(7) { animation-delay: .30s; }
+
+/* ══ 功能1：人格描述 ══ */
+.p-persona-desc { font-size: 12px; color: var(--text-h); text-align: center; margin-top: -4px; max-width: 260px; line-height: 1.6; }
+
+/* ══ 功能2：路人溫暖推薦 ══ */
+.warm-rec-sec { padding: 0 22px 14px; flex-shrink: 0; }
+.warm-rec-title { font-family: 'Noto Serif TC', serif; font-size: 15px; font-weight: 600; color: var(--brown); margin-bottom: 2px; }
+.warm-rec-subtitle { font-size: 11px; color: var(--text-h); margin-bottom: 10px; }
+.warm-rec-list { display: flex; flex-direction: column; gap: 8px; }
+.warm-rec-card {
+  background: linear-gradient(135deg, #FFF8F0, #FFF0E6);
+  border: 1px solid var(--warm2);
+  border-radius: 16px;
+  padding: 12px 14px;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.warm-rec-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px var(--sh); }
+.warm-rec-food { font-family: 'Noto Serif TC', serif; font-size: 14px; font-weight: 600; color: var(--brown); margin-bottom: 4px; }
+.warm-rec-msg { font-size: 12px; color: var(--text-s); line-height: 1.5; margin-bottom: 4px; }
+.warm-rec-count { font-size: 11px; color: var(--coral); font-weight: 500; }
+
+/* ══ 功能4：靈魂伴侶共同食物 ══ */
+.mb-foods { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+

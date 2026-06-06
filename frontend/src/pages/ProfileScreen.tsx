@@ -6,13 +6,22 @@ interface ProfileScreenProps {
   currentSwipeCount?: number;
 }
 
+interface PersonaData {
+  emoji: string;
+  title: string;
+  desc: string;
+}
+
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount = 0 }) => {
   const { user, logout } = useAuth();
   const [profileData, setProfileData] = useState<any>(null);
+  const [persona, setPersona] = useState<PersonaData>({ emoji: '🍜', title: '深夜療癒食客', desc: '疲憊的夜晚，一碗熱湯就是最好的擁抱' });
+  const [soulmateCount, setSoulmateCount] = useState(0);
 
   useEffect(() => {
     if (user?.id) {
       fetchProfile();
+      fetchSoulmate();
     }
   }, [user]);
 
@@ -20,6 +29,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
     try {
       const res = await apiClient.get(`/api/v1/user/${user?.id}/profile`);
       setProfileData(res.data);
+      // NOTE: 功能1 - 從後端取得動態計算的晚餐人格
+      if (res.data.persona) {
+        setPersona(res.data.persona);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  /**
+   * 功能4：從 soulmate API 取得今晚的靈魂伴侶匹配數量
+   */
+  const fetchSoulmate = async () => {
+    try {
+      const res = await apiClient.get('/api/v1/soulmate');
+      setSoulmateCount(res.data.match_count || 0);
     } catch (e) {
       console.error(e);
     }
@@ -34,7 +59,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
       <div className="profile-hero">
         <div className="av-ring">{user?.name ? user.name.charAt(0) : '😴'}</div>
         <div className="p-name">{user?.name || '使用者'}</div>
-        <div className="p-badge">🍜 深夜療癒食客</div>
+        {/* NOTE: 功能1 - 動態晚餐人格標籤 */}
+        <div className="p-badge">{persona.emoji} {persona.title}</div>
+        <div className="p-persona-desc">{persona.desc}</div>
       </div>
       
       <div className="stat-row">
@@ -47,7 +74,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
           <div className="sc-l">金舌頭聲望</div>
         </div>
         <div className="sc">
-          <div className="sc-n">3</div>
+          {/* NOTE: 功能4 - 靈魂伴侶數量從 API 動態取得 */}
+          <div className="sc-n">{soulmateCount}</div>
           <div className="sc-l">靈魂伴侶</div>
         </div>
       </div>

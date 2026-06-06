@@ -298,6 +298,115 @@ def final_recommendation_score(
     return round(ps * 0.60 + cs * 0.25 + ctx * 0.15, 2)
 
 
+# ── 功能1：晚餐人格分析 ──────────────────────────────────────────────────────
+
+# NOTE: 料理分類映射表，用於判斷用戶偏好的料理風格
+FOOD_CATEGORY_KEYWORDS: Dict[str, List[str]] = {
+    "日式": ["拉麵", "壽司", "丼", "烏龍", "蕎麥", "天婦羅", "味噌", "照燒", "定食", "日式", "握壽司", "刺身", "章魚燒", "大阪燒", "涮涮鍋", "關東煮", "炸豬排"],
+    "韓式": ["韓式", "石鍋", "泡菜", "年糕", "炸雞", "部隊鍋", "大醬", "冷麵", "雪濃", "人蔘雞", "銅盤", "紫菜包"],
+    "台式": ["滷肉飯", "雞肉飯", "擔仔麵", "蚵仔", "肉圓", "碗粿", "米粉", "鍋貼", "臭豆腐", "鹽酥雞", "鐵板麵", "麵線", "刈包", "大腸", "四神湯", "虱目魚", "筒仔米糕", "魯肉", "爌肉"],
+    "西式": ["漢堡", "披薩", "義大利", "牛排", "沙拉", "燉飯", "三明治", "薯條", "炸魚", "焗烤"],
+    "泰越": ["泰式", "越南", "河粉", "冬蔭功", "咖哩", "打拋", "月亮蝦餅", "春捲"],
+    "辣味": ["麻辣", "辣炒", "辣味", "川味", "椒麻", "剝皮辣椒", "辣"],
+    "肉類": ["牛肉", "豬肉", "雞肉", "排骨", "牛排", "烤肉", "叉燒", "燒肉", "肋排", "羊肉", "鴨"],
+    "健康": ["沙拉", "健康", "低脂", "燕麥", "藜麥", "蔬菜", "優格", "舒肥", "蒟蒻"],
+}
+
+def compute_dinner_persona(swipes: list) -> Dict[str, any]:
+    """
+    根據用戶的歷史刷卡數據，分析並回傳最匹配的「晚餐人格」。
+    分析維度：料理類型偏好、用餐情境、情緒標籤。
+    """
+    if not swipes:
+        return {"emoji": "🍽️", "title": "美食探索者", "desc": "刷更多卡片解鎖你的專屬人格！"}
+
+    # 統計正面互動（right / heart）的料理分類
+    positive = [s for s in swipes if s.action in ("right", "heart")]
+    if not positive:
+        return {"emoji": "🍽️", "title": "美食探索者", "desc": "刷更多卡片解鎖你的專屬人格！"}
+
+    category_counts: Dict[str, int] = defaultdict(int)
+    for s in positive:
+        for cat, keywords in FOOD_CATEGORY_KEYWORDS.items():
+            if any(kw in s.food_name for kw in keywords):
+                category_counts[cat] += 1
+
+    # 統計情緒標籤
+    emotion_counts: Dict[str, int] = defaultdict(int)
+    for s in positive:
+        if s.emotion_tag:
+            emotion_counts[s.emotion_tag] += 1
+
+    # 統計用餐情境
+    mood_counts: Dict[str, int] = defaultdict(int)
+    for s in swipes:
+        if s.mood_context:
+            for tag in s.mood_context.split(","):
+                tag = tag.strip()
+                if tag:
+                    mood_counts[tag] += 1
+
+    total_positive = len(positive)
+
+    # NOTE: 人格判定規則，按優先順序匹配第一個符合條件的人格
+    personas = [
+        {
+            "emoji": "🍜", "title": "孤獨拉麵獵人",
+            "desc": "享受一人食的寧靜，日式料理是你的靈魂歸宿",
+            "check": lambda: mood_counts.get("一個人", 0) / max(len(swipes), 1) > 0.3 and category_counts.get("日式", 0) / total_positive > 0.3,
+        },
+        {
+            "emoji": "🥩", "title": "無肉不歡者",
+            "desc": "沒有肉的晚餐不算晚餐，你是天生的肉食主義者",
+            "check": lambda: category_counts.get("肉類", 0) / total_positive > 0.5,
+        },
+        {
+            "emoji": "🔥", "title": "辣味狂熱者",
+            "desc": "無辣不歡！越辣越有勁，你的味蕾渴望刺激",
+            "check": lambda: category_counts.get("辣味", 0) / total_positive > 0.3,
+        },
+        {
+            "emoji": "🥗", "title": "養生達人",
+            "desc": "健康飲食是你的信仰，身體就是最好的投資",
+            "check": lambda: (category_counts.get("健康", 0) / total_positive > 0.25) or (mood_counts.get("健康優先", 0) / max(len(swipes), 1) > 0.3),
+        },
+        {
+            "emoji": "👫", "title": "社交美食家",
+            "desc": "吃飯就是要一群人！你是揪團吃飯的靈魂人物",
+            "check": lambda: mood_counts.get("想找人揪", 0) / max(len(swipes), 1) > 0.25,
+        },
+        {
+            "emoji": "🌍", "title": "異國冒險家",
+            "desc": "世界這麼大，每道異國料理都是一場味覺旅行",
+            "check": lambda: (category_counts.get("日式", 0) + category_counts.get("韓式", 0) + category_counts.get("泰越", 0) + category_counts.get("西式", 0)) / total_positive > 0.5,
+        },
+        {
+            "emoji": "🌙", "title": "深夜療癒食客",
+            "desc": "疲憊的夜晚，一碗熱湯就是最好的擁抱",
+            "check": lambda: (emotion_counts.get("療癒", 0) / total_positive > 0.2) or (mood_counts.get("疲憊求療癒", 0) / max(len(swipes), 1) > 0.2),
+        },
+        {
+            "emoji": "🍲", "title": "台味職人",
+            "desc": "在地小吃才是王道，台灣味就是你的 DNA",
+            "check": lambda: category_counts.get("台式", 0) / total_positive > 0.4,
+        },
+    ]
+
+    for p in personas:
+        try:
+            if p["check"]():
+                return {"emoji": p["emoji"], "title": p["title"], "desc": p["desc"]}
+        except (ZeroDivisionError, KeyError):
+            continue
+
+    # 預設人格：依最多的料理類型給一個泛用描述
+    if category_counts:
+        top_cat = max(category_counts, key=category_counts.get)
+        return {"emoji": "🍽️", "title": f"{top_cat}料理愛好者", "desc": f"你對{top_cat}料理情有獨鍾，繼續探索更多美食吧！"}
+
+    return {"emoji": "🍽️", "title": "美食探索者", "desc": "刷更多卡片解鎖你的專屬人格！"}
+
+
 # ── Pydantic Schemas ──────────────────────────────────────────────────────────
 class RegisterReq(BaseModel):
     name: str
@@ -401,10 +510,36 @@ def submit_session(
     user.total_swipes += len(req.swipes)
     db.commit()
 
-    # 重新計算全體熱度分數（背景可改為 async task）
+    # NOTE: 功能3 - 影響力數據回饋
+    # 記錄 recompute 前的排名，與 recompute 後的排名做比較
+    from sqlalchemy import func as sqlfunc
+    old_rankings: Dict[str, int] = {}
+    positive_food_names = [item.food_name for item in req.swipes if item.action in ("right", "heart")]
+    if positive_food_names:
+        old_rows = db.query(FoodScore).order_by(FoodScore.score.desc()).all()
+        for i, r in enumerate(old_rows):
+            if r.food_name in positive_food_names:
+                old_rankings[r.food_name] = i + 1
+
     recompute_food_scores(db)
 
-    return {"ok": True, "swipes_saved": len(req.swipes)}
+    # 計算排名變化，產生影響力通知訊息
+    impact_messages: List[str] = []
+    if positive_food_names:
+        new_rows = db.query(FoodScore).order_by(FoodScore.score.desc()).all()
+        for i, r in enumerate(new_rows):
+            new_rank = i + 1
+            if r.food_name in positive_food_names:
+                old_rank = old_rankings.get(r.food_name)
+                if old_rank is None:
+                    # 新上榜的食物
+                    impact_messages.append(f"你讓『{r.food_name}』首次登上熱度榜第 {new_rank} 名！🆕")
+                elif new_rank < old_rank:
+                    impact_messages.append(f"你的選擇把『{r.food_name}』從第 {old_rank} 名推上第 {new_rank} 名！🔥")
+                elif new_rank <= 3:
+                    impact_messages.append(f"你的選擇讓『{r.food_name}』繼續穩坐第 {new_rank} 名 👑")
+
+    return {"ok": True, "swipes_saved": len(req.swipes), "impact_messages": impact_messages}
 
 
 @app.post("/recommend", summary="取得個人化推薦分數（越多資料越準）")
@@ -479,13 +614,169 @@ def user_profile(
             top_foods[sw.food_name] += 1
         if sw.action == "heart":
             zone_hearts[sw.food_zone or "未分類"] += 1
+
+    # NOTE: 功能1 - 動態計算晚餐人格
+    persona = compute_dinner_persona(swipes)
+
     return {
         "total_swipes"   : len(swipes),
         "zone_preference": dict(sorted(zone_likes.items(), key=lambda x: -x[1])),
         "zone_hearts"    : dict(sorted(zone_hearts.items(), key=lambda x: -x[1])),
         "top_foods"      : dict(sorted(top_foods.items(), key=lambda x: -x[1])[:20]),
         "reputation"     : me.reputation,
+        "persona"        : persona,
     }
+
+# ── 功能2：路人溫暖推薦 ──────────────────────────────────────────────────────
+@app.get("/warm-recommendations", summary="取得路人溫暖推薦")
+def warm_recommendations(
+    mood: str = "疲憊求療癒",
+    me: User = Depends(current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    根據用戶當前的情緒標籤，查找其他用戶在相同情境下最愛的食物，
+    自動生成「路人推薦卡片」，營造社群溫暖感。
+    """
+    from sqlalchemy import func as sqlfunc
+
+    # 查詢其他用戶在相同 mood 下 heart 最多的食物
+    rows = (
+        db.query(
+            Swipe.food_name,
+            sqlfunc.count(Swipe.id).label("cnt"),
+        )
+        .filter(
+            Swipe.user_id != me.id,
+            Swipe.action.in_(["heart", "right"]),
+            Swipe.mood_context.like(f"%{mood}%"),
+        )
+        .group_by(Swipe.food_name)
+        .order_by(sqlfunc.count(Swipe.id).desc())
+        .limit(5)
+        .all()
+    )
+
+    if rows:
+        recommendations = [
+            {
+                "food_name": r.food_name,
+                "supporter_count": r.cnt,
+                "message": f"有 {r.cnt} 位路人在心情低落時選擇了這道菜 🫂",
+            }
+            for r in rows
+        ]
+    else:
+        # fallback：沒有足夠資料時顯示預設推薦
+        recommendations = [
+            {"food_name": "老字號雞湯麵", "supporter_count": 12, "message": "12 位路人在心情低落時選擇了一碗暖心雞湯麵 🫂"},
+            {"food_name": "紅豆湯圓", "supporter_count": 8, "message": "8 位路人推薦甜甜的紅豆湯圓療癒你的心 🫂"},
+            {"food_name": "薑母鴨暖鍋", "supporter_count": 6, "message": "6 位路人推薦用薑母鴨溫暖這個夜晚 🫂"},
+        ]
+
+    return {"mood": mood, "recommendations": recommendations}
+
+
+# ── 功能4：晚餐靈魂伴侶匹配 ──────────────────────────────────────────────────
+@app.get("/soulmate", summary="查詢今晚的晚餐靈魂伴侶")
+def soulmate(
+    me: User = Depends(current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    計算今晚（17:00 後）與當前用戶右滑高度一致的其他用戶。
+    使用 Jaccard 相似度，≥ 60% 即判定為 Match。
+    """
+    from sqlalchemy import func as sqlfunc
+
+    # 取得今天 17:00 的時間點
+    today = datetime.utcnow().date()
+    evening_start = datetime.combine(today, datetime.min.time().replace(hour=9))  # UTC 9:00 = 台灣 17:00
+
+    # 取得當前用戶今晚的正面食物清單
+    my_foods = set(
+        r.food_name for r in
+        db.query(Swipe.food_name)
+        .filter(
+            Swipe.user_id == me.id,
+            Swipe.action.in_(["right", "heart"]),
+            Swipe.swiped_at >= evening_start,
+        )
+        .all()
+    )
+
+    if not my_foods:
+        # 用戶今晚還沒刷卡，回傳 fallback
+        return {
+            "matched": False,
+            "match_count": 0,
+            "best_match_rate": 0,
+            "common_foods": [],
+            "message": "今晚還沒開始刷卡，快去刷卡找你的靈魂伴侶吧！",
+        }
+
+    # 查詢同區域、今晚有正面互動的其他用戶
+    other_user_ids = [
+        r[0] for r in
+        db.query(Swipe.user_id)
+        .join(User, Swipe.user_id == User.id)
+        .filter(
+            Swipe.user_id != me.id,
+            Swipe.action.in_(["right", "heart"]),
+            Swipe.swiped_at >= evening_start,
+            User.region == me.region,
+        )
+        .distinct()
+        .all()
+    ]
+
+    best_rate = 0.0
+    match_count = 0
+    best_common: List[str] = []
+
+    for uid in other_user_ids:
+        their_foods = set(
+            r.food_name for r in
+            db.query(Swipe.food_name)
+            .filter(
+                Swipe.user_id == uid,
+                Swipe.action.in_(["right", "heart"]),
+                Swipe.swiped_at >= evening_start,
+            )
+            .all()
+        )
+        if not their_foods:
+            continue
+
+        # Jaccard 相似度 = 交集 / 聯集
+        intersection = my_foods & their_foods
+        union = my_foods | their_foods
+        rate = len(intersection) / len(union) * 100 if union else 0
+
+        if rate >= 60:
+            match_count += 1
+            if rate > best_rate:
+                best_rate = rate
+                best_common = list(intersection)[:5]
+
+    if match_count > 0:
+        return {
+            "matched": True,
+            "match_count": match_count,
+            "best_match_rate": round(best_rate, 0),
+            "common_foods": best_common,
+            "message": f"有 {match_count} 位路人與你的晚餐頻率 {round(best_rate)}% 契合",
+        }
+
+    # 沒有高度匹配，但有一些重疊就給個提示
+    return {
+        "matched": False,
+        "match_count": 0,
+        "best_match_rate": 0,
+        "common_foods": [],
+        "message": "目前還沒找到靈魂伴侶，繼續刷卡提高匹配機會！",
+    }
+
 
 # ── Admin Endpoints ───────────────────────────────────────────────────────────
 @app.get("/admin/stats", summary="後台統計儀表板", dependencies=[Depends(admin_guard)])
