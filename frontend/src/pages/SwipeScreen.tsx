@@ -67,8 +67,12 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
       const savedTags = savedTagsStr ? JSON.parse(savedTagsStr) : null;
       if (savedTags) {
         setMoodTags(savedTags);
+        generateRandomFoods(true, savedTags);
+      } else {
+        // 如果遇到有 date 卻沒有 tags 的情況 (舊版邏輯殘留)，強制重新選擇
+        setShowMoodModal(true);
+        generateRandomFoods(false);
       }
-      generateRandomFoods(true, savedTags);
     }
   }, []);
 
