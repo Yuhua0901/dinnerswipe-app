@@ -35,9 +35,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const response = await apiClient.get('/api/v1/auth/me');
       setUser(response.data);
-    } catch (error) {
-      console.error('Failed to fetch user:', error);
-      logout(); // Invalid token
+    } catch (error: any) {
+      // NOTE: 只有明確收到 401 Unauthorized 才登出（Token 真的無效或過期）
+      // 其他錯誤（網路超時、Vercel 冷啟動、暫時 502/503）不應踢回登入頁，
+      // 否則會造成「使用中突然閃退到登入頁面」的問題
+      const status = error?.response?.status;
+      if (status === 401) {
+        console.warn('Token invalid or expired, logging out.');
+        logout();
+      } else {
+        // 暫時性錯誤：保留登入狀態，讓使用者繼續使用
+        console.error('Failed to fetch user (non-auth error, keeping session):', error);
+      }
     } finally {
       setIsLoading(false);
     }
