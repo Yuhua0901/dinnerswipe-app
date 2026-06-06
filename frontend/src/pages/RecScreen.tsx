@@ -98,7 +98,16 @@ export const RecScreen: React.FC = () => {
       </div>
 
       <div className="rec-acts">
-        <button className="rbtn pr">今晚就吃這個！</button>
+        <button
+          className="rbtn pr"
+          onClick={() => {
+            // NOTE: 使用 Google Maps 搜尋 URL，讓用戶能直接查看餐廳位置與評價
+            const query = encodeURIComponent(recommendation.food_name);
+            window.open(`https://www.google.com/maps/search/${query}`, '_blank');
+          }}
+        >
+          今晚就吃這個！
+        </button>
         <button className="rbtn se">繼續刷卡</button>
       </div>
     </div>
