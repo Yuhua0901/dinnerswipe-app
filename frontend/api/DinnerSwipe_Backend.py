@@ -134,7 +134,10 @@ class FoodScore(Base):
     updated_at   = Column(DateTime, default=datetime.utcnow)
 
 
-Base.metadata.create_all(engine)
+try:
+    Base.metadata.create_all(engine)
+except Exception as e:
+    print(f"Warning: Failed to create tables at startup: {e}")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def get_db():
