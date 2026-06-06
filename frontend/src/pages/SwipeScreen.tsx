@@ -2,16 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
 
 const FOOD_EMOJIS: Record<string, string> = {
-  '魯肉飯': '🍚', '雞肉飯': '🍚', '牛肉麵': '🍜', '擔仔麵': '🍜', '拉麵': '🍜',
-  '義大利麵': '🍝', '漢堡': '🍔', '披薩': '🍕', '生魚片': '🍣', '壽司': '🍣',
-  '火鍋': '🍲', '牛排': '🥩', '炸雞': '🍗', '便當': '🍱', '咖哩飯': '🍛'
+  '魯肉飯': '🍚', '雞肉飯': '🍚', '爌肉飯': '🍚', '燒肉飯': '🍱', '排骨飯': '🍱', '肉燥飯': '🍚', '飯糰': '🍙', 
+  '炒飯': '🍚', '燴飯': '🍛', '飯': '🍚', '牛肉麵': '🍜', '擔仔麵': '🍜', '拉麵': '🍜', '意麵': '🍜', '乾麵': '🍜', '涼麵': '🍜', 
+  '烏龍麵': '🍜', '麵線': '🍜', '米粉': '🍜', '冬粉': '🍜', '河粉': '🍜', '義大利麵': '🍝', '麵': '🍜',
+  '漢堡': '🍔', '披薩': '🍕', '牛排': '🥩', '火鍋': '🍲', '壽喜燒': '🍲', '羊肉爐': '🍲', '薑母鴨': '🍲',
+  '生魚片': '🍣', '壽司': '🍣', '手卷': '🌯', '便當': '🍱', '餐盒': '🍱', '咖哩': '🍛', 
+  '炸雞': '🍗', '香雞排': '🍗', '鹽酥雞': '🍗', '薯條': '🍟', 
+  '蛋餅': '🌯', '水餃': '🥟', '鍋貼': '🥟', '煎餃': '🥟', '湯包': '🥟', '燒賣': '🥟', '包子': '🥟',
+  '沙拉': '🥗', '三明治': '🥪', '吐司': '🍞', '麵包': '🥖', '可頌': '🥐', '熱狗': '🌭',
+  '臭豆腐': '🥘', '滷味': '🥘', '鴨血': '🥘', '豆腐': '🥘', '大腸包小腸': '🌭', 
+  '蚵仔煎': '🥞', '蔥抓餅': '🥞', '蔥油餅': '🥞', '煎餅': '🥞', '大阪燒': '🥞', '鬆餅': '🥞', 
+  '肉圓': '🧆', '碗粿': '🧆', '肉': '🍖', '烤肉': '🍢', '串燒': '🍢',
+  '濃湯': '🥣', '雞湯': '🥣', '湯': '🥣', '粥': '🥣', '鍋': '🍲', 
+  '蛋糕': '🍰', '甜點': '🍮', '塔': '🍮', '冰淇淋': '🍦', '豆花': '🍨', '冰': '🍧', '湯圓': '🥣',
+  '奶': '🧋', '咖啡': '☕', '飲料': '🥤', '茶': '🍵'
 };
 
 const getEmoji = (name: string) => {
   for (const [key, emoji] of Object.entries(FOOD_EMOJIS)) {
     if (name.includes(key)) return emoji;
   }
-  return '🍜';
+  return '🍽️';
 };
 
 interface SwipeScreenProps {
@@ -42,8 +53,18 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const dragOffsetRef = React.useRef({ x: 0, y: 0 }); // 儲存最新的拖曳距離，避免 end 時 closure state 尚未更新
 
+  // NOTE: 每日強制登入選心情相關狀態
+  const [showMoodModal, setShowMoodModal] = useState(false);
+
   useEffect(() => {
-    generateRandomFoods();
+    const today = new Date().toDateString();
+    const lastDate = localStorage.getItem('today_mood_date');
+    if (lastDate !== today) {
+      setShowMoodModal(true);
+      generateRandomFoods(false);
+    } else {
+      generateRandomFoods(true);
+    }
   }, []);
 
   /**
@@ -94,7 +115,7 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
   };
 
 
-  const generateRandomFoods = () => {
+  const generateRandomFoods = (shouldStartSession = true) => {
     const shuffled = [...ALL_FOODS].sort(() => 0.5 - Math.random());
     const selected = shuffled.slice(0, 15).map(name => ({
       name,
@@ -103,16 +124,25 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
       tags: ['健康優先']
     }));
     setFoods(selected);
-    startSession();
+    if (shouldStartSession) {
+      startSession();
+    }
   };
 
-  const startSession = async () => {
+  const startSession = async (overrideMoods?: string[]) => {
     try {
-      const res = await apiClient.post('/api/v1/session/start', { mood_tags: moodTags });
+      const res = await apiClient.post('/api/v1/session/start', { mood_tags: overrideMoods || moodTags });
       setSessionId(res.data.session_id);
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleMoodSelect = (mood: string) => {
+    setMoodTags([mood]);
+    localStorage.setItem('today_mood_date', new Date().toDateString());
+    setShowMoodModal(false);
+    startSession([mood]);
   };
 
   const handleSwipe = async (action: 'left' | 'right' | 'heart', emotion: string = '') => {
@@ -243,17 +273,44 @@ export const SwipeScreen: React.FC<SwipeScreenProps> = ({ onSwipe, isHidden = fa
       <div className="mood-bar">
         <div className="mood-label">今天的狀態</div>
         <div className="mood-pills">
-          {['一個人', '疲憊求療癒', '想找人揪', '犒賞自己', '健康優先'].map(m => (
+          {defaultMoods.map(m => (
             <div 
               key={m} 
               className={`mood-pill ${moodTags.includes(m) ? 'sel' : ''}`}
-              onClick={() => setMoodTags([m])}
+              onClick={() => {
+                setMoodTags([m]);
+                // 也讓這裡點選時更新日期，避免今天之後再彈出
+                localStorage.setItem('today_mood_date', new Date().toDateString());
+              }}
             >
               {m}
             </div>
           ))}
         </div>
       </div>
+      
+      {/* 每日首次登入強制選心情 Modal */}
+      {showMoodModal && (
+        <div className="modal-overlay" style={{ zIndex: 1000, background: 'rgba(252, 248, 243, 0.95)' }}>
+          <div className="modal-content" style={{ textAlign: 'center', maxWidth: '320px', padding: '30px 20px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '10px' }}>👋</div>
+            <div className="modal-title" style={{ fontSize: '24px', color: 'var(--brown-d)', marginBottom: '10px' }}>早安！今天心情如何？</div>
+            <div className="modal-sub" style={{ marginBottom: '25px', color: 'var(--brown)' }}>選個心情，讓我們為你推薦最對味的晚餐。</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {defaultMoods.map(m => (
+                <button 
+                  key={m}
+                  className="rbtn pr"
+                  style={{ width: '100%', margin: 0, padding: '12px', fontSize: '16px' }}
+                  onClick={() => handleMoodSelect(m)}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       
       {currentIndex >= 15 || currentIndex >= foods.length ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>

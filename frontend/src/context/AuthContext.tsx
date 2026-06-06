@@ -9,6 +9,7 @@ interface User {
   total_swipes: number;
   reputation: number;
   created_at: string;
+  avatar?: string;
 }
 
 interface AuthContextType {

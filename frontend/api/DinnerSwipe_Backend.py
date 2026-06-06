@@ -87,6 +87,7 @@ class User(Base):
     email       = Column(String(128), unique=True, index=True, nullable=False)
     pw_hash     = Column(String(256), nullable=False)
     region      = Column(String(64), default="台南市東區")
+    avatar_base64 = Column(Text, default="")
     created_at  = Column(DateTime, default=datetime.utcnow)
     total_swipes= Column(Integer, default=0)
     reputation  = Column(Integer, default=0)   # 金舌頭聲望
@@ -157,6 +158,12 @@ class DirectRecommendation(Base):
 
 try:
     Base.metadata.create_all(engine)
+    try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN avatar_base64 TEXT DEFAULT '';"))
+    except Exception:
+        pass # Ignore if column already exists
 except Exception as e:
     print(f"Warning: Failed to create tables at startup: {e}")
 
@@ -426,6 +433,7 @@ class RegisterReq(BaseModel):
     email: str
     password: str
     region: Optional[str] = "台南市東區"
+    avatar_base64: Optional[str] = ""
 
 class LoginReq(BaseModel):
     email: str
@@ -465,6 +473,7 @@ def register(req: RegisterReq, db: Session = Depends(get_db)):
         email   = req.email,
         pw_hash = hash_pw(req.password),
         region  = req.region or "台南市東區",
+        avatar_base64 = req.avatar_base64 or "",
     )
     db.add(user); db.commit(); db.refresh(user)
     return {"token": make_token(user.id), "user_id": user.id, "name": user.name}
@@ -484,6 +493,7 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
         "id": user.id, "name": user.name, "email": user.email,
         "region": user.region, "total_swipes": user.total_swipes,
         "reputation": user.reputation, "created_at": user.created_at,
+        "avatar": user.avatar_base64,
     }
 
 # ── Swipe Session Endpoints ───────────────────────────────────────────────────
@@ -718,7 +728,8 @@ def get_users_moods(db: Session = Depends(get_db)):
                 result.append({
                     "user_id": user.id,
                     "name": user.name,
-                    "mood": s.mood_tags.split(",")[0] if s.mood_tags else "想吃點好的"
+                    "mood": s.mood_tags.split(",")[0] if s.mood_tags else "想吃點好的",
+                    "avatar": user.avatar_base64
                 })
                 seen_users.add(user.id)
         if len(result) >= 10:

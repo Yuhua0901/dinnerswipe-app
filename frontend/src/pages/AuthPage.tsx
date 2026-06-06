@@ -11,8 +11,48 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [avatarBase64, setAvatarBase64] = useState<string>('');
   const [error, setError] = useState('');
   const { login } = useAuth();
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxSize = 150;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxSize) {
+            height *= maxSize / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width *= maxSize / height;
+            height = maxSize;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64 = canvas.toDataURL('image/jpeg', 0.8);
+          setAvatarBase64(base64);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSubmit = async () => {
     setError('');
@@ -27,14 +67,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess }) => {
         login(response.data.token, { id: response.data.user_id, name: response.data.name });
         onSuccess();
       } else {
-        const response = await apiClient.post('/api/v1/auth/register', { name, email, password, region: '台南市東區' });
+        const response = await apiClient.post('/api/v1/auth/register', { 
+          name, email, password, region: '台南市東區', avatar_base64: avatarBase64 
+        });
         login(response.data.token, { id: response.data.user_id, name: response.data.name });
         onSuccess();
       }
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       if (Array.isArray(detail)) {
-        // 處理 Pydantic 的 422 驗證錯誤格式 (陣列)
         setError(detail[0]?.msg || '輸入格式錯誤');
       } else {
         setError(detail || '發生錯誤，請稍後再試');
@@ -53,6 +94,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess }) => {
       <div className="auth-sub">{isLogin ? '繼續你的晚餐決策' : '開始你的晚餐決策旅程'}</div>
       
       <div className="auth-form">
+        {!isLogin && (
+          <div className="avatar-upload" title="上傳大頭照">
+            {avatarBase64 ? <img src={avatarBase64} alt="Avatar" /> : <div style={{fontSize: '24px'}}>📷</div>}
+            <input type="file" accept="image/*" onChange={handleImageUpload} />
+          </div>
+        )}
+
         {isLogin ? (
           <input 
             className="auth-input" 

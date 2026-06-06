@@ -19,6 +19,7 @@ interface StrangerData {
   user_id: number;
   name: string;
   mood: string;
+  avatar?: string;
 }
 
 interface ReceivedRec {
@@ -159,8 +160,8 @@ export const RecScreen: React.FC = () => {
           <div className="discover-scroll">
             {strangers.map(s => (
               <div key={s.user_id} className="stranger-card" onClick={() => handleOpenModal(s)}>
-                <div className="stranger-av">
-                  👤
+                <div className="stranger-av" style={{ overflow: 'hidden', padding: s.avatar ? 0 : undefined }}>
+                  {s.avatar ? <img src={s.avatar} alt="av" style={{width:'100%', height:'100%', objectFit:'cover'}} /> : '👤'}
                   <div className="mood-badge">{s.mood.includes('班') ? '💼' : s.mood.includes('喪') ? '🌧️' : '💭'}</div>
                 </div>
                 <div className="stranger-n">{s.name}</div>
