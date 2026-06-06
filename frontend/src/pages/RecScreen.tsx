@@ -27,6 +27,7 @@ interface ReceivedRec {
   sender_name: string;
   food_name: string;
   message: string;
+  status: string;
   created_at: string;
 }
 
@@ -146,6 +147,25 @@ export const RecScreen: React.FC = () => {
     }
   };
 
+  const handleAcceptRec = async (recId: number) => {
+    try {
+      await apiClient.post(`/api/v1/recommendations/${recId}/accept`);
+      // 更新本地狀態
+      setReceivedRecs(prev => 
+        prev.map(r => r.id === recId ? { ...r, status: 'accepted' } : r)
+      );
+      const toast = document.getElementById('toast');
+      if (toast) {
+        toast.innerText = `已接受推薦並送出聲望給對方！ ❤️`;
+        toast.className = 'show';
+        setTimeout(() => { toast.className = toast.className.replace('show', ''); }, 3000);
+      }
+    } catch(e) {
+      console.error(e);
+      alert('接受推薦失敗或已經接受過');
+    }
+  };
+
   if (!recommendation) {
     return <div className="screen active" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>計算推薦中...</div>;
   }
@@ -237,6 +257,20 @@ export const RecScreen: React.FC = () => {
             </div>
             <div className="rc-food">{r.food_name}</div>
             {r.message && <div className="rc-msg">"{r.message}"</div>}
+            
+            {r.status === 'pending' ? (
+              <button 
+                className="rbtn pr" 
+                style={{ marginTop: '10px', fontSize: '14px', padding: '8px 12px', width: '100%', background: 'var(--coral)', color: '#fff' }}
+                onClick={() => handleAcceptRec(r.id)}
+              >
+                接受推薦並感謝對方 ❤️
+              </button>
+            ) : (
+              <div style={{ marginTop: '10px', fontSize: '13px', color: 'var(--coral)', fontWeight: 'bold', textAlign: 'center', background: 'rgba(255, 126, 103, 0.1)', padding: '6px', borderRadius: '8px' }}>
+                已接受這個溫暖推薦 ❤️
+              </div>
+            )}
           </div>
         ))}
 

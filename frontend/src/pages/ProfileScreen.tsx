@@ -99,6 +99,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
     reader.readAsDataURL(file);
   };
 
+  const repScore = profileData?.reputation || user?.reputation || 0;
+  let repTitle = '🌱 美食菜鳥';
+  let repColor = 'var(--text-m)';
+  if (repScore >= 30) {
+    repTitle = '👑 金舌頭';
+    repColor = 'var(--amber)';
+  } else if (repScore >= 10) {
+    repTitle = '🔥 地區美食達人';
+    repColor = 'var(--coral)';
+  }
+
   return (
     <div className="screen active" style={{ display: 'flex' }}>
       <div className="profile-hero">
@@ -119,6 +130,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
           <div style={{ position: 'absolute', bottom: '0', right: '50%', transform: 'translateX(50%)', background: 'rgba(0,0,0,0.5)', width: '100%', textAlign: 'center', fontSize: '10px', color: '#fff', padding: '2px 0' }}>編輯</div>
         </div>
         <div className="p-name">{user?.name || '使用者'}</div>
+        <div style={{ fontWeight: 'bold', fontSize: '14px', color: repColor, marginBottom: '8px' }}>{repTitle}</div>
+        
         {/* NOTE: 功能1 - 動態晚餐人格標籤 */}
         <div className="p-badge">{persona.emoji} {persona.title}</div>
         <div className="p-persona-desc">{persona.desc}</div>
@@ -130,7 +143,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
           <div className="sc-l">刷過卡片</div>
         </div>
         <div className="sc">
-          <div className="sc-n">{profileData?.reputation || user?.reputation || 0}</div>
+          <div className="sc-n">{repScore}</div>
           <div className="sc-l">金舌頭聲望</div>
         </div>
         <div className="sc">

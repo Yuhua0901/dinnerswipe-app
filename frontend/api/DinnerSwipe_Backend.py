@@ -150,6 +150,7 @@ class DirectRecommendation(Base):
     receiver_id  = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     food_name    = Column(String(128), nullable=False)
     message      = Column(String(256), default="")
+    status       = Column(String(16), default="pending") # pending, accepted
     created_at   = Column(DateTime, default=datetime.utcnow)
 
     sender       = relationship("User", foreign_keys=[sender_id])
@@ -162,6 +163,12 @@ try:
         from sqlalchemy import text
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN avatar_base64 TEXT DEFAULT '';"))
+    except Exception:
+        pass # Ignore if column already exists
+    try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE direct_recommendations ADD COLUMN status VARCHAR(16) DEFAULT 'pending';"))
     except Exception:
         pass # Ignore if column already exists
 except Exception as e:
@@ -858,9 +865,33 @@ def get_received_recommendations(
             "sender_name": r.sender.name if r.sender else "匿名路人",
             "food_name": r.food_name,
             "message": r.message,
+            "status": r.status,
             "created_at": r.created_at.isoformat()
         })
     return result
+
+@app.post("/recommendations/{rec_id}/accept", summary="接受溫暖推薦")
+def accept_recommendation(
+    rec_id: int,
+    me: User = Depends(current_user),
+    db: Session = Depends(get_db)
+):
+    rec = db.query(DirectRecommendation).filter(DirectRecommendation.id == rec_id).first()
+    if not rec:
+        raise HTTPException(404, "找不到該推薦")
+    if rec.receiver_id != me.id:
+        raise HTTPException(403, "只能接受發給自己的推薦")
+    if rec.status == "accepted":
+        raise HTTPException(400, "已經接受過此推薦了")
+        
+    # 更新狀態並增加發送者的聲望
+    rec.status = "accepted"
+    if rec.sender:
+        # 每被接受一次推薦，發送者 +5 聲望
+        rec.sender.reputation = (rec.sender.reputation or 0) + 5
+        
+    db.commit()
+    return {"ok": True, "message": "已接受推薦並給予對方聲望回饋！"}
 
 
 # ── 功能4：晚餐靈魂伴侶匹配 ──────────────────────────────────────────────────
