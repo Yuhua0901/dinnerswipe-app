@@ -141,6 +141,19 @@ class FoodScore(Base):
     score        = Column(Float, default=0.0)   # 0-100, computed
     updated_at   = Column(DateTime, default=datetime.utcnow)
 
+class DirectRecommendation(Base):
+    """使用者主動發送給其他使用者的推薦卡片"""
+    __tablename__ = "direct_recommendations"
+    id           = Column(Integer, primary_key=True, index=True)
+    sender_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+    receiver_id  = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    food_name    = Column(String(128), nullable=False)
+    message      = Column(String(256), default="")
+    created_at   = Column(DateTime, default=datetime.utcnow)
+
+    sender       = relationship("User", foreign_keys=[sender_id])
+    receiver     = relationship("User", foreign_keys=[receiver_id])
+
 
 try:
     Base.metadata.create_all(engine)
@@ -437,6 +450,11 @@ class RecommendReq(BaseModel):
     mood_tags: List[str] = []
     emotion_map: Dict[str, str] = {}
 
+class SendRecommendationReq(BaseModel):
+    receiver_id: int
+    food_name: str
+    message: str = ""
+
 # ── Auth Endpoints ────────────────────────────────────────────────────────────
 @app.post("/auth/register", summary="新使用者註冊")
 def register(req: RegisterReq, db: Session = Depends(get_db)):
@@ -675,6 +693,78 @@ def warm_recommendations(
         ]
 
     return {"mood": mood, "recommendations": recommendations}
+
+
+@app.get("/users/moods", summary="取得最近有特殊心情的活躍使用者")
+def get_users_moods(db: Session = Depends(get_db)):
+    """
+    撈取最近 24 小時內有設定 mood_tags 的使用者，作為「路人動態牆」
+    """
+    yesterday = datetime.utcnow() - timedelta(days=1)
+    
+    # 找最近 24 小時的 session
+    recent_sessions = db.query(SwipeSession).filter(
+        SwipeSession.started_at >= yesterday,
+        SwipeSession.mood_tags != ""
+    ).order_by(SwipeSession.started_at.desc()).all()
+    
+    # 過濾出唯一的使用者與他們最新的 mood
+    seen_users = set()
+    result = []
+    for s in recent_sessions:
+        if s.user_id not in seen_users:
+            user = db.query(User).filter(User.id == s.user_id).first()
+            if user:
+                result.append({
+                    "user_id": user.id,
+                    "name": user.name,
+                    "mood": s.mood_tags.split(",")[0] if s.mood_tags else "想吃點好的"
+                })
+                seen_users.add(user.id)
+        if len(result) >= 10:
+            break
+    
+    return result
+
+@app.post("/recommendations/send", summary="發送溫暖推薦卡片")
+def send_recommendation(
+    req: SendRecommendationReq,
+    me: User = Depends(current_user),
+    db: Session = Depends(get_db)
+):
+    receiver = db.query(User).filter(User.id == req.receiver_id).first()
+    if not receiver:
+        raise HTTPException(404, "找不到該使用者")
+    
+    new_rec = DirectRecommendation(
+        sender_id=me.id,
+        receiver_id=receiver.id,
+        food_name=req.food_name,
+        message=req.message
+    )
+    db.add(new_rec)
+    db.commit()
+    return {"ok": True, "message": "成功發送推薦！"}
+
+@app.get("/recommendations/received", summary="取得收到的推薦卡片")
+def get_received_recommendations(
+    me: User = Depends(current_user),
+    db: Session = Depends(get_db)
+):
+    recs = db.query(DirectRecommendation).filter(
+        DirectRecommendation.receiver_id == me.id
+    ).order_by(DirectRecommendation.created_at.desc()).limit(20).all()
+    
+    result = []
+    for r in recs:
+        result.append({
+            "id": r.id,
+            "sender_name": r.sender.name if r.sender else "匿名路人",
+            "food_name": r.food_name,
+            "message": r.message,
+            "created_at": r.created_at.isoformat()
+        })
+    return result
 
 
 # ── 功能4：晚餐靈魂伴侶匹配 ──────────────────────────────────────────────────

@@ -325,3 +325,40 @@ body {
 /* ══ 功能4：靈魂伴侶共同食物 ══ */
 .mb-foods { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
 
+/* ══ DISCOVER STRANGERS (路人動態牆) ══ */
+.discover-sec { padding: 10px 0 10px 22px; flex-shrink: 0; }
+.discover-t { font-size: 13px; color: var(--text-h); margin-bottom: 8px; font-weight: 500; }
+.discover-scroll { display: flex; gap: 12px; overflow-x: auto; padding-right: 22px; padding-bottom: 5px; scrollbar-width: none; }
+.discover-scroll::-webkit-scrollbar { display: none; }
+.stranger-card { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 70px; flex-shrink: 0; cursor: pointer; transition: transform 0.2s; }
+.stranger-card:hover { transform: scale(1.05); }
+.stranger-av { width: 50px; height: 50px; border-radius: 50%; background: var(--warm1); border: 2px solid var(--amber); display: flex; align-items: center; justify-content: center; font-size: 24px; position: relative; }
+.stranger-av .mood-badge { position: absolute; bottom: -2px; right: -2px; background: var(--white); border-radius: 50%; padding: 2px; font-size: 12px; border: 1px solid var(--warm2); }
+.stranger-n { font-size: 11px; color: var(--text-s); font-weight: 500; text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stranger-m { font-size: 10px; color: var(--text-h); text-align: center; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ══ SEND RECOMMENDATION MODAL ══ */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 999; padding: 22px; opacity: 0; animation: fadeIn 0.2s forwards; }
+.modal-content { background: var(--card); width: 100%; max-width: 320px; border-radius: 24px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); transform: translateY(20px); animation: slideUp 0.3s forwards ease-out; }
+.modal-title { font-family: 'Noto Serif TC', serif; font-size: 18px; font-weight: 600; color: var(--brown); margin-bottom: 8px; text-align: center; }
+.modal-sub { font-size: 13px; color: var(--text-h); text-align: center; margin-bottom: 16px; }
+.modal-input { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--warm2); background: var(--warm1); font-size: 14px; color: var(--text-s); margin-bottom: 10px; outline: none; transition: border-color 0.2s; }
+.modal-input:focus { border-color: var(--amber); background: var(--white); }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+.modal-btn { flex: 1; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; border: none; transition: transform 0.1s; }
+.modal-btn:active { transform: scale(0.96); }
+.modal-btn.cancel { background: var(--warm1); color: var(--text-h); border: 1px solid var(--warm2); }
+.modal-btn.send { background: var(--amber); color: var(--white); box-shadow: 0 4px 12px rgba(230, 162, 60, 0.3); }
+
+/* ══ RECEIVED RECOMMENDATIONS ══ */
+.received-card { background: linear-gradient(135deg, #FFF9F0 0%, #FFFDF8 100%); border: 1px dashed var(--amber); border-radius: 16px; padding: 14px; margin-bottom: 12px; position: relative; overflow: hidden; transition: transform 0.15s; }
+.received-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px var(--sh); }
+.received-card::before { content: "💌"; position: absolute; top: -5px; right: 5px; font-size: 40px; opacity: 0.15; transform: rotate(15deg); pointer-events: none; }
+.rc-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.rc-sender { font-size: 12px; font-weight: 600; color: var(--amber-d); }
+.rc-time { font-size: 10px; color: var(--text-h); }
+.rc-food { font-family: 'Noto Serif TC', serif; font-size: 16px; font-weight: 700; color: var(--brown); margin-bottom: 4px; }
+.rc-msg { font-size: 13px; color: var(--text-s); font-style: italic; }
+
+@keyframes slideUp { to { transform: translateY(0); } }
+@keyframes fadeIn { to { opacity: 1; } }

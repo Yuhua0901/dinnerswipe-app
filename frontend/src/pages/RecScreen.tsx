@@ -15,21 +15,42 @@ interface SoulmateData {
   message: string;
 }
 
+interface StrangerData {
+  user_id: number;
+  name: string;
+  mood: string;
+}
+
+interface ReceivedRec {
+  id: number;
+  sender_name: string;
+  food_name: string;
+  message: string;
+  created_at: string;
+}
+
 export const RecScreen: React.FC = () => {
   const [recommendation, setRecommendation] = useState<any>(null);
   const [warmRecs, setWarmRecs] = useState<WarmRecommendation[]>([]);
   const [soulmate, setSoulmate] = useState<SoulmateData | null>(null);
+  const [strangers, setStrangers] = useState<StrangerData[]>([]);
+  const [receivedRecs, setReceivedRecs] = useState<ReceivedRec[]>([]);
+  
+  const [showModal, setShowModal] = useState(false);
+  const [targetUser, setTargetUser] = useState<StrangerData | null>(null);
+  const [recFood, setRecFood] = useState('');
+  const [recMsg, setRecMsg] = useState('');
 
   useEffect(() => {
     fetchRecommendations();
     fetchWarmRecommendations();
     fetchSoulmate();
+    fetchStrangers();
+    fetchReceivedRecs();
   }, []);
 
   const fetchRecommendations = async () => {
     try {
-      // In a real flow, the last session data (swiped foods) would be passed here
-      // For now, we simulate fetching recommendation
       const mockSwipedFoods = ['老字號雞湯麵', '炙燒鮭魚握壽司', '經典美式起司漢堡'];
       const res = await apiClient.post('/api/v1/recommend', {
         food_names: mockSwipedFoods,
@@ -39,7 +60,6 @@ export const RecScreen: React.FC = () => {
       setRecommendation(res.data.top1 || res.data.recommendations[0]);
     } catch (e) {
       console.error(e);
-      // Fallback
       setRecommendation({
         food_name: '老字號雞湯麵',
         final_score: 92.5,
@@ -50,9 +70,6 @@ export const RecScreen: React.FC = () => {
     }
   };
 
-  /**
-   * 功能2：取得路人溫暖推薦
-   */
   const fetchWarmRecommendations = async () => {
     try {
       const res = await apiClient.get('/api/v1/warm-recommendations', {
@@ -61,32 +78,70 @@ export const RecScreen: React.FC = () => {
       setWarmRecs(res.data.recommendations || []);
     } catch (e) {
       console.error(e);
-      // fallback 預設資料
       setWarmRecs([
         { food_name: '老字號雞湯麵', supporter_count: 12, message: '12 位路人在心情低落時選擇了一碗暖心雞湯麵 🫂' },
-        { food_name: '紅豆湯圓', supporter_count: 8, message: '8 位路人推薦甜甜的紅豆湯圓療癒你的心 🫂' },
-        { food_name: '薑母鴨暖鍋', supporter_count: 6, message: '6 位路人推薦用薑母鴨溫暖這個夜晚 🫂' },
       ]);
     }
   };
 
-  /**
-   * 功能4：取得今晚的靈魂伴侶匹配資料
-   */
   const fetchSoulmate = async () => {
     try {
       const res = await apiClient.get('/api/v1/soulmate');
       setSoulmate(res.data);
     } catch (e) {
       console.error(e);
-      // fallback
-      setSoulmate({
-        matched: true,
-        match_count: 1,
-        best_match_rate: 100,
-        common_foods: ['老字號雞湯麵'],
-        message: '有 1 位路人與你的晚餐頻率 100% 契合',
+    }
+  };
+
+  const fetchStrangers = async () => {
+    try {
+      const res = await apiClient.get('/api/v1/users/moods');
+      setStrangers(res.data);
+    } catch (e) {
+      console.error(e);
+      setStrangers([
+        { user_id: 999, name: '小明', mood: '剛加完班' },
+        { user_id: 998, name: '阿華', mood: '很沮喪' },
+        { user_id: 997, name: 'Ken', mood: '疲憊求療癒' }
+      ]);
+    }
+  };
+
+  const fetchReceivedRecs = async () => {
+    try {
+      const res = await apiClient.get('/api/v1/recommendations/received');
+      setReceivedRecs(res.data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleOpenModal = (user: StrangerData) => {
+    setTargetUser(user);
+    setRecFood('');
+    setRecMsg('');
+    setShowModal(true);
+  };
+
+  const handleSendRecommendation = async () => {
+    if (!targetUser || !recFood.trim()) return;
+    try {
+      await apiClient.post('/api/v1/recommendations/send', {
+        receiver_id: targetUser.user_id,
+        food_name: recFood.trim(),
+        message: recMsg.trim()
       });
+      setShowModal(false);
+      
+      const toast = document.getElementById('toast');
+      if (toast) {
+        toast.innerText = `已成功將 ${recFood} 推薦給 ${targetUser.name}！`;
+        toast.className = 'show';
+        setTimeout(() => { toast.className = toast.className.replace('show', ''); }, 3000);
+      }
+    } catch(e) {
+      console.error(e);
+      alert('發送失敗');
     }
   };
 
@@ -96,6 +151,26 @@ export const RecScreen: React.FC = () => {
 
   return (
     <div className="screen active" style={{ display: 'flex' }}>
+      
+      {/* ══ 路人動態牆 ══ */}
+      {strangers.length > 0 && (
+        <div className="discover-sec">
+          <div className="discover-t">看看其他人的心情...</div>
+          <div className="discover-scroll">
+            {strangers.map(s => (
+              <div key={s.user_id} className="stranger-card" onClick={() => handleOpenModal(s)}>
+                <div className="stranger-av">
+                  👤
+                  <div className="mood-badge">{s.mood.includes('班') ? '💼' : s.mood.includes('喪') ? '🌧️' : '💭'}</div>
+                </div>
+                <div className="stranger-n">{s.name}</div>
+                <div className="stranger-m">{s.mood}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="rec-hero">
         <div className="rec-pre">今晚最適合你的選擇</div>
         <div className="rec-e">🍜</div>
@@ -128,26 +203,6 @@ export const RecScreen: React.FC = () => {
         </div>
       </div>
 
-      <div className="contrib-sec">
-        <div className="contrib-t">你對各料理區域的貢獻度</div>
-        <div className="contrib-grid">
-          <div className="contrib-row">
-            <div className="contrib-header">
-              <div className="contrib-zone">台南市東區</div>
-              <div className="contrib-pct">45%</div>
-            </div>
-            <div className="contrib-bar-wrap">
-              <div className="contrib-bar" style={{ width: '45%', background: 'var(--amber)' }}></div>
-            </div>
-            <div className="contrib-foods">
-              <span className="cfood">老字號雞湯麵</span>
-              <span className="cfood">麻辣鴨血臭豆腐</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* NOTE: 功能4 - 靈魂伴侶匹配（動態資料驅動） */}
       {soulmate && (
         <div className="match-banner">
           <div className="mb-icon">{soulmate.matched ? '👫' : '🔍'}</div>
@@ -167,30 +222,41 @@ export const RecScreen: React.FC = () => {
         </div>
       )}
 
-      {/* NOTE: 功能2 - 路人溫暖推薦 */}
-      {warmRecs.length > 0 && (
-        <div className="warm-rec-sec">
-          <div className="warm-rec-title">🫂 路人溫暖推薦</div>
-          <div className="warm-rec-subtitle">其他人在相似心情時最愛的選擇</div>
-          <div className="warm-rec-list">
-            {warmRecs.map((rec) => (
-              <div key={rec.food_name} className="warm-rec-card">
-                <div className="warm-rec-food">{rec.food_name}</div>
-                <div className="warm-rec-msg">{rec.message}</div>
-                <div className="warm-rec-count">
-                  ❤️ {rec.supporter_count} 人推薦
-                </div>
-              </div>
-            ))}
+      {/* 專屬與路人推薦區 */}
+      <div className="warm-rec-sec">
+        <div className="warm-rec-title">🫂 溫暖推薦</div>
+        <div className="warm-rec-subtitle">來自社群的關心與推薦</div>
+        
+        {/* 真人專屬推薦 (Received Cards) */}
+        {receivedRecs.map(r => (
+          <div key={r.id} className="received-card">
+            <div className="rc-header">
+              <span className="rc-sender">{r.sender_name}</span>
+              <span className="rc-time">剛剛特地推薦給你</span>
+            </div>
+            <div className="rc-food">{r.food_name}</div>
+            {r.message && <div className="rc-msg">"{r.message}"</div>}
           </div>
+        ))}
+
+        {/* 系統統計的溫暖推薦 */}
+        <div className="warm-rec-list">
+          {warmRecs.map((rec) => (
+            <div key={rec.food_name} className="warm-rec-card">
+              <div className="warm-rec-food">{rec.food_name}</div>
+              <div className="warm-rec-msg">{rec.message}</div>
+              <div className="warm-rec-count">
+                ❤️ {rec.supporter_count} 人推薦
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
       <div className="rec-acts">
         <button
           className="rbtn pr"
           onClick={() => {
-            // NOTE: 使用 Google Maps 搜尋 URL，讓用戶能直接查看餐廳位置與評價
             const query = encodeURIComponent(recommendation.food_name);
             window.open(`https://www.google.com/maps/search/${query}`, '_blank');
           }}
@@ -199,6 +265,35 @@ export const RecScreen: React.FC = () => {
         </button>
         <button className="rbtn se">繼續刷卡</button>
       </div>
+
+      {/* Modal Overlay */}
+      {showModal && targetUser && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}>
+          <div className="modal-content">
+            <div className="modal-title">發送溫暖推薦</div>
+            <div className="modal-sub">給正在「{targetUser.mood}」的 {targetUser.name}</div>
+            
+            <input 
+              className="modal-input" 
+              placeholder="推薦吃什麼？ (例如: 熱甜湯)" 
+              value={recFood} 
+              onChange={e => setRecFood(e.target.value)} 
+              autoFocus
+            />
+            <input 
+              className="modal-input" 
+              placeholder="留句溫暖的話給他吧..." 
+              value={recMsg} 
+              onChange={e => setRecMsg(e.target.value)} 
+            />
+            
+            <div className="modal-actions">
+              <button className="modal-btn cancel" onClick={() => setShowModal(false)}>取消</button>
+              <button className="modal-btn send" onClick={handleSendRecommendation}>送出卡片</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
