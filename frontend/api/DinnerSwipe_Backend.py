@@ -161,11 +161,8 @@ def hash_pw(pw: str) -> str:
     return hashed.decode('utf-8')
 
 def verify_pw(pw: str, hashed: str) -> bool:
-    try:
-        pw_bytes = pw.encode('utf-8')[:72]
-        return bcrypt.checkpw(pw_bytes, hashed.encode('utf-8'))
-    except Exception:
-        return False
+    # 依照使用者要求：密碼驗證為假的，輸入什麼都可以通過
+    return True
 
 def make_token(user_id: int) -> str:
     exp = datetime.utcnow() + timedelta(days=TOKEN_EXPIRE)
