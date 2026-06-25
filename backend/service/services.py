@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from core.security import verify_password, get_password_hash, create_access_token
-from repository.repos import UserRepository, SwipeRepository, ScoreRepository
+from repository.repos import UserRepository, SwipeRepository, ScoreRepository, UsageRepository
 from schema.schemas import RegisterReq, LoginReq, RecommendReq, RecommendationResult
 from typing import List, Dict
 import urllib.request
@@ -142,3 +142,40 @@ class LocationService:
             db.commit()
             return {"ok": True, "region": user.region}
         return {"ok": False, "msg": "User not found"}
+
+
+class UsageService:
+    """使用時間追蹤的業務邏輯層"""
+
+    @staticmethod
+    def start_tracking(db: Session, user_id: int, page_context: str = "") -> dict:
+        """
+        開始追蹤使用時間
+        會自動關閉該用戶先前未結束的 Session
+        """
+        usage_sess = UsageRepository.create_session(db, user_id, page_context)
+        return {"session_id": usage_sess.id, "started_at": str(usage_sess.started_at)}
+
+    @staticmethod
+    def heartbeat(db: Session, session_id: int, user_id: int) -> dict:
+        """
+        處理心跳回報
+        """
+        usage_sess = UsageRepository.heartbeat(db, session_id, user_id)
+        if not usage_sess:
+            raise HTTPException(404, "使用 Session 不存在或已結束")
+        return {"ok": True, "session_id": session_id}
+
+    @staticmethod
+    def end_tracking(db: Session, session_id: int, user_id: int) -> dict:
+        """
+        結束使用時間追蹤
+        """
+        return UsageRepository.end_session(db, session_id, user_id)
+
+    @staticmethod
+    def get_stats(db: Session, user_id: int) -> dict:
+        """
+        取得用戶的使用時間統計
+        """
+        return UsageRepository.get_user_usage_stats(db, user_id)

@@ -24,6 +24,8 @@ class UserProfile(BaseModel):
     region: str
     total_swipes: int
     reputation: int
+    total_usage_seconds: int = 0
+    last_active_at: Optional[datetime] = None
     created_at: datetime
 
 class LocationUpdateReq(BaseModel):
@@ -65,3 +67,14 @@ class LeaderboardItem(BaseModel):
     total_right: int
     total_left: int
     heart_rate: float
+
+
+# --- 使用時間追蹤 ---
+class UsageStartReq(BaseModel):
+    page_context: str = ""
+
+class UsageHeartbeatReq(BaseModel):
+    session_id: int
+
+class UsageEndReq(BaseModel):
+    session_id: int

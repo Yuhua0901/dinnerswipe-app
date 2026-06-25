@@ -8,9 +8,10 @@ from api.deps import get_current_user, admin_guard, get_current_user_optional
 from schema.schemas import (
     RegisterReq, LoginReq, Token, UserProfile, 
     SessionStartReq, SessionSubmitReq, RecommendReq,
-    RecommendationResult, LocationUpdateReq
+    RecommendationResult, LocationUpdateReq,
+    UsageStartReq, UsageHeartbeatReq, UsageEndReq
 )
-from service.services import AuthService, RecommendService, AnalyticsService, LocationService
+from service.services import AuthService, RecommendService, AnalyticsService, LocationService, UsageService
 from repository.repos import SwipeRepository, ScoreRepository
 from model.models import User, SwipeSession, User as UserModel
 
@@ -77,6 +78,38 @@ def leaderboard(
 @api_router.get("/user/{user_id}/profile", summary="取得使用者口味分析")
 def user_profile(user_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return AnalyticsService.get_user_profile(db, user_id, user.id, user.reputation)
+
+# --- Usage Tracking ---
+@api_router.post("/usage/start", summary="開始記錄使用時間")
+def usage_start(req: UsageStartReq, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return UsageService.start_tracking(db, user.id, req.page_context)
+
+@api_router.post("/usage/heartbeat", summary="使用時間心跳回報")
+def usage_heartbeat(req: UsageHeartbeatReq, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return UsageService.heartbeat(db, req.session_id, user.id)
+
+@api_router.post("/usage/end", summary="結束記錄使用時間")
+def usage_end(
+    req: UsageEndReq,
+    token: str = None,
+    user: User = Depends(get_current_user_optional),
+    db: Session = Depends(get_db)
+):
+    # NOTE: sendBeacon 無法帶 Authorization header，因此支援 query param token 作為備用
+    if not user and token:
+        from jose import jwt, JWTError
+        from core.config import settings
+        from repository.repos import UserRepository
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            user_id = payload.get("sub")
+            if user_id:
+                user = UserRepository.get_by_id(db, int(user_id))
+        except JWTError:
+            pass
+    if not user:
+        raise HTTPException(401, "未授權")
+    return UsageService.end_tracking(db, req.session_id, user.id)
 
 # --- Admin ---
 @api_router.get("/admin/stats", summary="後台統計", dependencies=[Depends(admin_guard)])

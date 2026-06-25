@@ -27,6 +27,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
     return `${Math.floor(diffHours / 24)}天前`;
   };
 
+  /**
+   * 將累計使用秒數格式化為易讀的時間字串
+   * @param totalSeconds 總秒數
+   * @returns 格式化時間字串（如「2h 30m」）
+   */
+  const formatUsageTime = (totalSeconds: number): string => {
+    if (totalSeconds < 60) return `${totalSeconds}s`;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
   useEffect(() => {
     if (user?.id) {
       fetchProfile();
@@ -150,6 +163,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentSwipeCount 
         <div className="sc">
           <div className="sc-n">{(profileData?.total_swipes || user?.total_swipes || 0) + currentSwipeCount}</div>
           <div className="sc-l">刷過卡片</div>
+        </div>
+        <div className="sc">
+          <div className="sc-n">{formatUsageTime(user?.total_usage_seconds || 0)}</div>
+          <div className="sc-l">累計使用</div>
         </div>
         <div className="sc">
           <div className="sc-n">{repScore}</div>

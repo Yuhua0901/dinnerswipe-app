@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, Integer
-from model.models import User, SwipeSession, Swipe, FoodScore
+from model.models import User, SwipeSession, Swipe, FoodScore, UsageSession
 from schema.schemas import RegisterReq, SwipeItem
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class UserRepository:
     @staticmethod
@@ -236,3 +236,126 @@ class ScoreRepository:
         result.sort(key=lambda x: x["score"], reverse=True)
         return result[:limit]
 
+
+class UsageRepository:
+    """使用時間追蹤的資料存取層"""
+
+    # NOTE: 心跳超時閾值，超過此時間未收到心跳則視為已離線
+    HEARTBEAT_TIMEOUT_SECONDS = 90
+
+    @staticmethod
+    def create_session(db: Session, user_id: int, page_context: str = "") -> UsageSession:
+        """
+        建立新的使用時間 Session
+        同時關閉該用戶所有未結束的舊 Session（防止殘留）
+        """
+        UsageRepository._close_stale_sessions(db, user_id)
+
+        usage_sess = UsageSession(
+            user_id=user_id,
+            page_context=page_context
+        )
+        db.add(usage_sess)
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.last_active_at = func.now()
+
+        db.commit()
+        db.refresh(usage_sess)
+        return usage_sess
+
+    @staticmethod
+    def heartbeat(db: Session, session_id: int, user_id: int) -> UsageSession | None:
+        """
+        更新心跳時間，確認用戶仍在使用中
+        """
+        usage_sess = db.query(UsageSession).filter(
+            UsageSession.id == session_id,
+            UsageSession.user_id == user_id,
+            UsageSession.ended_at.is_(None)
+        ).first()
+
+        if not usage_sess:
+            return None
+
+        usage_sess.last_heartbeat_at = func.now()
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.last_active_at = func.now()
+
+        db.commit()
+        db.refresh(usage_sess)
+        return usage_sess
+
+    @staticmethod
+    def end_session(db: Session, session_id: int, user_id: int) -> dict:
+        """
+        結束使用 Session，計算使用時長並累加到用戶總時間
+        """
+        usage_sess = db.query(UsageSession).filter(
+            UsageSession.id == session_id,
+            UsageSession.user_id == user_id,
+            UsageSession.ended_at.is_(None)
+        ).first()
+
+        if not usage_sess:
+            return {"ok": False, "msg": "Session 不存在或已結束"}
+
+        now = datetime.utcnow()
+        usage_sess.ended_at = now
+
+        # NOTE: 使用 started_at 計算完整使用時長
+        duration = int((now - usage_sess.started_at).total_seconds())
+        usage_sess.duration_seconds = max(duration, 0)
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.total_usage_seconds = (user.total_usage_seconds or 0) + usage_sess.duration_seconds
+            user.last_active_at = now
+
+        db.commit()
+        return {"ok": True, "duration_seconds": usage_sess.duration_seconds}
+
+    @staticmethod
+    def _close_stale_sessions(db: Session, user_id: int) -> None:
+        """
+        關閉該用戶所有未結束的舊 Session
+        避免因異常退出導致的 Session 殘留
+        """
+        stale_sessions = db.query(UsageSession).filter(
+            UsageSession.user_id == user_id,
+            UsageSession.ended_at.is_(None)
+        ).all()
+
+        now = datetime.utcnow()
+        for sess in stale_sessions:
+            sess.ended_at = now
+            duration = int((now - sess.started_at).total_seconds())
+            sess.duration_seconds = max(duration, 0)
+
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                user.total_usage_seconds = (user.total_usage_seconds or 0) + sess.duration_seconds
+
+        if stale_sessions:
+            db.commit()
+
+    @staticmethod
+    def get_user_usage_stats(db: Session, user_id: int) -> dict:
+        """
+        取得用戶使用時間統計
+        """
+        user = db.query(User).filter(User.id == user_id).first()
+        total_seconds = user.total_usage_seconds or 0 if user else 0
+
+        session_count = db.query(func.count(UsageSession.id)).filter(
+            UsageSession.user_id == user_id
+        ).scalar() or 0
+
+        return {
+            "total_usage_seconds": total_seconds,
+            "session_count": session_count,
+            "last_active_at": user.last_active_at if user else None
+        }

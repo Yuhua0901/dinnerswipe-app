@@ -14,9 +14,12 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     total_swipes = Column(Integer, default=0)
     reputation = Column(Integer, default=0)
+    total_usage_seconds = Column(Integer, default=0)
+    last_active_at = Column(DateTime(timezone=True), nullable=True)
     
     swipes = relationship("Swipe", back_populates="user")
     sessions = relationship("SwipeSession", back_populates="user")
+    usage_sessions = relationship("UsageSession", back_populates="user")
 
 class SwipeSession(Base):
     __tablename__ = "swipe_sessions"
@@ -49,6 +52,23 @@ class Swipe(Base):
 # 建立索引以加速查詢
 Index("ix_swipes_food", Swipe.food_name)
 Index("ix_swipes_user_food", Swipe.user_id, Swipe.food_name)
+
+class UsageSession(Base):
+    """記錄每次使用 APP 的時間區間"""
+    __tablename__ = "usage_sessions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+    last_heartbeat_at = Column(DateTime(timezone=True), server_default=func.now())
+    duration_seconds = Column(Integer, default=0)
+    page_context = Column(String(64), default="")
+    
+    user = relationship("User", back_populates="usage_sessions")
+
+Index("ix_usage_sessions_user", UsageSession.user_id)
+
 
 class FoodScore(Base):
     __tablename__ = "food_scores"
