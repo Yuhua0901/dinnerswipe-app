@@ -633,7 +633,32 @@ def recommend(
     回傳每道食物的最終推薦分數與分項說明。
     """
     results = []
-    for name in req.food_names:
+    food_names = req.food_names
+    
+    # 若傳入空名單或預設 mock 資料，則進行動態候選食物提取
+    if not food_names or food_names == ['老字號雞湯麵', '炙燒鮭魚握壽司', '經典美式起司漢堡']:
+        # 1. 優先獲取最新場次（Session）中，使用者右滑或愛心過的食物
+        latest_sess = db.query(SwipeSession).filter(
+            SwipeSession.user_id == user.id
+        ).order_by(SwipeSession.started_at.desc()).first()
+        
+        if latest_sess:
+            db_swipes = db.query(Swipe.food_name).filter(
+                Swipe.user_id == user.id,
+                Swipe.session_id == latest_sess.id,
+                Swipe.action.in_(["right", "heart"])
+            ).distinct().all()
+            food_names = [s[0] for s in db_swipes] if db_swipes else []
+            
+        # 2. 若最新場次無喜好食物，則擴展至歷史所有正面互動過（右滑或愛心）的食物
+        if not food_names:
+            db_swipes = db.query(Swipe.food_name).filter(
+                Swipe.user_id == user.id,
+                Swipe.action.in_(["right", "heart"])
+            ).distinct().all()
+            food_names = [s[0] for s in db_swipes] if db_swipes else []
+
+    for name in food_names:
         ps  = personal_score(name, user.id, db)
         cs  = community_score(name, db)
         ctx = context_score(name, req.mood_tags, req.emotion_map, db)

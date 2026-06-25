@@ -1,6 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
 
+const FOOD_EMOJIS: Record<string, string> = {
+  '魯肉飯': '🍚', '雞肉飯': '🍚', '爌肉飯': '🍚', '燒肉飯': '🍱', '排骨飯': '🍱', '肉燥飯': '🍚', '飯糰': '🍙', 
+  '炒飯': '🍚', '燴飯': '🍛', '飯': '🍚', '牛肉麵': '🍜', '擔仔麵': '🍜', '拉麵': '🍜', '意麵': '🍜', '乾麵': '🍜', '涼麵': '🍜', 
+  '烏龍麵': '🍜', '麵線': '🍜', '米粉': '🍜', '冬粉': '🍜', '河粉': '🍜', '義大利麵': '🍝', '麵': '🍜',
+  '漢堡': '🍔', '披薩': '🍕', '牛排': '🥩', '火鍋': '🍲', '壽喜燒': '🍲', '羊肉爐': '🍲', '薑母鴨': '🍲',
+  '生魚片': '🍣', '壽司': '🍣', '手卷': '🌯', '便當': '🍱', '餐盒': '🍱', '咖哩': '🍛', 
+  '炸雞': '🍗', '香雞排': '🍗', '鹽酥雞': '🍗', '薯條': '🍟', 
+  '蛋餅': '🌯', '水餃': '🥟', '鍋貼': '🥟', '煎餃': '🥟', '湯包': '🥟', '燒賣': '🥟', '包子': '🥟',
+  '沙拉': '🥗', '三明治': '🥪', '吐司': '🍞', '麵包': '🥖', '可頌': '🥐', '熱狗': '🌭',
+  '臭豆腐': '🥘', '滷味': '🥘', '鴨血': '🥘', '豆腐': '🥘', '大腸包小腸': '🌭', 
+  '蚵仔煎': '🥞', '蔥抓餅': '🥞', '蔥油餅': '🥞', '煎餅': '🥞', '大阪燒': '🥞', '鬆餅': '🥞', 
+  '肉圓': '🧆', '碗粿': '🧆', '肉': '🍖', '烤肉': '🍢', '串燒': '🍢',
+  '濃湯': '🥣', '雞湯': '🥣', '湯': '🥣', '粥': '🥣', '鍋': '🍲', 
+  '蛋糕': '🍰', '甜點': '🍮', '塔': '🍮', '冰淇淋': '🍦', '豆花': '🍨', '冰': '🍧', '湯圓': '🥣',
+  '奶': '🧋', '咖啡': '☕', '飲料': '🥤', '茶': '🍵'
+};
+
+const getEmoji = (name: string) => {
+  for (const [key, emoji] of Object.entries(FOOD_EMOJIS)) {
+    if (name.includes(key)) return emoji;
+  }
+  return '🍽️';
+};
+
 interface WarmRecommendation {
   food_name: string;
   supporter_count: number;
@@ -43,6 +67,10 @@ export const RecScreen: React.FC = () => {
   const [recFood, setRecFood] = useState('');
   const [recMsg, setRecMsg] = useState('');
 
+  const [loading, setLoading] = useState(true);
+  const [hasNoSwipes, setHasNoSwipes] = useState(false);
+  const [timeLeftStr, setTimeLeftStr] = useState<string>('');
+
   useEffect(() => {
     fetchRecommendations();
     fetchWarmRecommendations();
@@ -51,17 +79,83 @@ export const RecScreen: React.FC = () => {
     fetchReceivedRecs();
   }, []);
 
-  const fetchRecommendations = async () => {
+  useEffect(() => {
+    const updateCountdown = () => {
+      const cached = localStorage.getItem('dinner_rec_cache');
+      if (cached) {
+        const { timestamp } = JSON.parse(cached);
+        const elapsed = Date.now() - timestamp;
+        const limit = 2 * 60 * 60 * 1000; // 2 小時
+        const remaining = limit - elapsed;
+        
+        if (remaining > 0) {
+          const totalSeconds = Math.floor(remaining / 1000);
+          const hours = Math.floor(totalSeconds / 3600);
+          const minutes = Math.floor((totalSeconds % 3600) / 60);
+          const seconds = totalSeconds % 60;
+          
+          if (hours > 0) {
+            setTimeLeftStr(`${hours} 小時 ${minutes} 分`);
+          } else {
+            setTimeLeftStr(`${minutes} 分 ${seconds} 秒`);
+          }
+        } else {
+          setTimeLeftStr('');
+          // 快取過期，重新載入
+          fetchRecommendations(true);
+        }
+      } else {
+        setTimeLeftStr('');
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [recommendation]);
+
+  const fetchRecommendations = async (forceRefresh = false) => {
+    setLoading(true);
+    setHasNoSwipes(false);
     try {
-      const mockSwipedFoods = ['老字號雞湯麵', '炙燒鮭魚握壽司', '經典美式起司漢堡'];
+      // 1. 檢查 2 小時快取
+      if (!forceRefresh) {
+        const cached = localStorage.getItem('dinner_rec_cache');
+        if (cached) {
+          const { food, timestamp } = JSON.parse(cached);
+          const twoHours = 2 * 60 * 60 * 1000;
+          if (Date.now() - timestamp < twoHours) {
+            setRecommendation(food);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // 2. 否則向後端請求
+      const savedTagsStr = localStorage.getItem('today_mood_tags');
+      const moodTags = savedTagsStr ? JSON.parse(savedTagsStr) : ['一個人'];
+      
       const res = await apiClient.post('/api/v1/recommend', {
-        food_names: mockSwipedFoods,
-        mood_tags: ['的一個人'],
+        food_names: [], // 讓後端自動尋找
+        mood_tags: moodTags,
         emotion_map: {}
       });
-      setRecommendation(res.data.top1 || res.data.recommendations[0]);
+      
+      const topFood = res.data.top1 || res.data.recommendations[0];
+      if (topFood) {
+        setRecommendation(topFood);
+        localStorage.setItem('dinner_rec_cache', JSON.stringify({
+          food: topFood,
+          timestamp: Date.now()
+        }));
+      } else {
+        setRecommendation(null);
+        setHasNoSwipes(true);
+      }
     } catch (e) {
       console.error(e);
+      // Fallback
       setRecommendation({
         food_name: '老字號雞湯麵',
         final_score: 92.5,
@@ -69,13 +163,19 @@ export const RecScreen: React.FC = () => {
         community_score: 95,
         context_score: 80,
       });
+    } finally {
+      setLoading(false);
     }
   };
 
   const fetchWarmRecommendations = async () => {
     try {
+      const savedTagsStr = localStorage.getItem('today_mood_tags');
+      const moodTags = savedTagsStr ? JSON.parse(savedTagsStr) : ['一個人'];
+      const currentMood = moodTags[0] || '一個人';
+
       const res = await apiClient.get('/api/v1/warm-recommendations', {
-        params: { mood: '疲憊求療癒' }
+        params: { mood: currentMood }
       });
       setWarmRecs(res.data.recommendations || []);
     } catch (e) {
@@ -166,8 +266,39 @@ export const RecScreen: React.FC = () => {
     }
   };
 
-  if (!recommendation) {
-    return <div className="screen active" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>計算推薦中...</div>;
+  if (loading) {
+    return (
+      <div className="screen active" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '24px', marginBottom: '12px' }}>🔄</div>
+          <div style={{ color: 'var(--text-s)', fontSize: '14px' }}>正在計算您的專屬晚餐推薦...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasNoSwipes) {
+    return (
+      <div className="screen active" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🍽️</div>
+        <h3 style={{ fontFamily: 'Noto Serif TC, serif', color: 'var(--brown)', marginBottom: '12px' }}>您目前還沒有候選晚餐喔！</h3>
+        <p style={{ color: 'var(--text-h)', fontSize: '14px', lineHeight: '1.6', maxWidth: '280px', marginBottom: '24px' }}>
+          推薦系統會依據您最近一次刷卡或歷史上喜歡（右滑/愛心）的卡片來進行加權計算。請先去首頁挑選幾款想吃的晚餐吧 💖
+        </p>
+        <button 
+          className="rbtn pr" 
+          onClick={() => {
+            const homeBtn = document.querySelector('.bottom-nav .nav-item') as HTMLElement;
+            if (homeBtn) {
+              homeBtn.click();
+            }
+          }}
+          style={{ width: 'auto', padding: '12px 24px' }}
+        >
+          立即前往刷卡
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -194,9 +325,15 @@ export const RecScreen: React.FC = () => {
 
       <div className="rec-hero">
         <div className="rec-pre">今晚最適合你的選擇</div>
-        <div className="rec-e">🍜</div>
+        <div className="rec-e">{getEmoji(recommendation.food_name)}</div>
         <div className="rec-name">{recommendation.food_name}</div>
-        <div className="rec-badge">你的喜好 ✕ 附近 84 人熱選</div>
+        {timeLeftStr ? (
+          <div className="rec-badge" style={{ background: '#EAE5D9', color: 'var(--text-s)', padding: '6px 14px', borderRadius: '20px' }}>
+            ⏱️ 推薦已鎖定 (將於 {timeLeftStr} 後重新計算)
+          </div>
+        ) : (
+          <div className="rec-badge">你的喜好 ✕ 附近 84 人熱選</div>
+        )}
       </div>
 
       <div className="score-sec">
