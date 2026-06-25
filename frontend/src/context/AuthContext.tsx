@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { apiClient, getSafeToken, setClientToken } from '../api/client';
+import { useUsageTracker } from '../hooks/use-usage-tracker';
 
 interface User {
   id: number;
@@ -8,6 +9,8 @@ interface User {
   region: string;
   total_swipes: number;
   reputation: number;
+  total_usage_seconds: number;
+  last_active_at: string | null;
   created_at: string;
   avatar?: string;
 }
@@ -76,6 +79,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setToken(null);
     setUser(null);
   };
+
+  // NOTE: 整合使用時間追蹤，登入後自動開始、登出自動結束
+  useUsageTracker(!!user);
 
   return (
     <AuthContext.Provider value={{ user, token, login, logout, isLoading, fetchUser }}>

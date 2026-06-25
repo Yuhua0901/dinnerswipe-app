@@ -91,8 +91,11 @@ class User(Base):
     created_at  = Column(DateTime, default=datetime.utcnow)
     total_swipes= Column(Integer, default=0)
     reputation  = Column(Integer, default=0)   # 金舌頭聲望
+    total_usage_seconds = Column(Integer, default=0)
+    last_active_at = Column(DateTime, nullable=True)
     swipes      = relationship("Swipe", back_populates="user")
     sessions    = relationship("SwipeSession", back_populates="user")
+    usage_sessions = relationship("UsageSession", back_populates="user")
 
 
 class SwipeSession(Base):
@@ -124,6 +127,21 @@ class Swipe(Base):
 
 Index("ix_swipes_food", Swipe.food_name)
 Index("ix_swipes_user_food", Swipe.user_id, Swipe.food_name)
+
+
+class UsageSession(Base):
+    """記錄每次使用 APP 的時間區間"""
+    __tablename__ = "usage_sessions"
+    id              = Column(Integer, primary_key=True, index=True)
+    user_id         = Column(Integer, ForeignKey("users.id"), nullable=False)
+    started_at      = Column(DateTime, default=datetime.utcnow)
+    ended_at        = Column(DateTime, nullable=True)
+    last_heartbeat_at = Column(DateTime, default=datetime.utcnow)
+    duration_seconds = Column(Integer, default=0)
+    page_context    = Column(String(64), default="")
+    user            = relationship("User", back_populates="usage_sessions")
+
+Index("ix_usage_sessions_user", UsageSession.user_id)
 
 
 class FoodScore(Base):
@@ -159,18 +177,20 @@ class DirectRecommendation(Base):
 
 try:
     Base.metadata.create_all(engine)
-    try:
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN avatar_base64 TEXT DEFAULT '';"))
-    except Exception:
-        pass # Ignore if column already exists
-    try:
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE direct_recommendations ADD COLUMN status VARCHAR(16) DEFAULT 'pending';"))
-    except Exception:
-        pass # Ignore if column already exists
+    from sqlalchemy import text
+    # NOTE: 為已存在的表新增欄位（若已存在則跳過）
+    _migration_sqls = [
+        "ALTER TABLE users ADD COLUMN avatar_base64 TEXT DEFAULT '';",
+        "ALTER TABLE direct_recommendations ADD COLUMN status VARCHAR(16) DEFAULT 'pending';",
+        "ALTER TABLE users ADD COLUMN total_usage_seconds INTEGER DEFAULT 0;",
+        "ALTER TABLE users ADD COLUMN last_active_at TIMESTAMP;",
+    ]
+    for sql in _migration_sqls:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(sql))
+        except Exception:
+            pass  # 欄位已存在則跳過
 except Exception as e:
     print(f"Warning: Failed to create tables at startup: {e}")
 
@@ -473,6 +493,16 @@ class SendRecommendationReq(BaseModel):
     food_name: str
     message: str = ""
 
+# --- 使用時間追蹤 ---
+class UsageStartReq(BaseModel):
+    page_context: str = ""
+
+class UsageHeartbeatReq(BaseModel):
+    session_id: int
+
+class UsageEndReq(BaseModel):
+    session_id: int
+
 # ── Auth Endpoints ────────────────────────────────────────────────────────────
 @app.post("/auth/register", summary="新使用者註冊")
 def register(req: RegisterReq, db: Session = Depends(get_db)):
@@ -504,6 +534,8 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
         "region": user.region, "total_swipes": user.total_swipes,
         "reputation": user.reputation, "created_at": user.created_at,
         "avatar": user.avatar_base64,
+        "total_usage_seconds": user.total_usage_seconds or 0,
+        "last_active_at": user.last_active_at,
     }
 
 @app.post("/auth/me/avatar", summary="更新自己的大頭照")
@@ -1010,6 +1042,124 @@ def soulmate(
         "common_foods": [],
         "message": "目前還沒找到靈魂伴侶，繼續刷卡提高匹配機會！",
     }
+
+# ── Usage Tracking Endpoints ──────────────────────────────────────────────────
+def _current_user_optional(authorization: str = Header(None), db: Session = Depends(get_db)):
+    """可選的用戶認證（sendBeacon 場景可能沒有 header）"""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        uid = int(payload["sub"])
+    except (JWTError, ValueError):
+        return None
+    return db.get(User, uid)
+
+
+def _close_stale_sessions(db: Session, user_id: int) -> None:
+    """
+    關閉該用戶所有未結束的舊 Session
+    避免因異常退出導致的 Session 殘留
+    """
+    stale_sessions = db.query(UsageSession).filter(
+        UsageSession.user_id == user_id,
+        UsageSession.ended_at.is_(None)
+    ).all()
+
+    now = datetime.utcnow()
+    for sess in stale_sessions:
+        sess.ended_at = now
+        duration = int((now - sess.started_at).total_seconds())
+        sess.duration_seconds = max(duration, 0)
+
+        user = db.get(User, user_id)
+        if user:
+            user.total_usage_seconds = (user.total_usage_seconds or 0) + sess.duration_seconds
+
+    if stale_sessions:
+        db.commit()
+
+
+@app.post("/usage/start", summary="開始記錄使用時間")
+def usage_start(
+    req: UsageStartReq,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db)
+):
+    # NOTE: 先關閉該用戶所有未結束的舊 Session（防止殘留）
+    _close_stale_sessions(db, user.id)
+
+    usage_sess = UsageSession(
+        user_id=user.id,
+        page_context=req.page_context
+    )
+    db.add(usage_sess)
+    user.last_active_at = datetime.utcnow()
+    db.commit()
+    db.refresh(usage_sess)
+    return {"session_id": usage_sess.id, "started_at": str(usage_sess.started_at)}
+
+
+@app.post("/usage/heartbeat", summary="使用時間心跳回報")
+def usage_heartbeat(
+    req: UsageHeartbeatReq,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db)
+):
+    usage_sess = db.query(UsageSession).filter(
+        UsageSession.id == req.session_id,
+        UsageSession.user_id == user.id,
+        UsageSession.ended_at.is_(None)
+    ).first()
+
+    if not usage_sess:
+        raise HTTPException(404, "使用 Session 不存在或已結束")
+
+    usage_sess.last_heartbeat_at = datetime.utcnow()
+    user.last_active_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True, "session_id": req.session_id}
+
+
+@app.post("/usage/end", summary="結束記錄使用時間")
+def usage_end(
+    req: UsageEndReq,
+    token: str = None,
+    user: User = Depends(_current_user_optional),
+    db: Session = Depends(get_db)
+):
+    # NOTE: sendBeacon 無法帶 Authorization header，因此支援 query param token 作為備用
+    if not user and token:
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            uid = int(payload["sub"])
+            user = db.get(User, uid)
+        except (JWTError, ValueError):
+            pass
+    if not user:
+        raise HTTPException(401, "未授權")
+
+    usage_sess = db.query(UsageSession).filter(
+        UsageSession.id == req.session_id,
+        UsageSession.user_id == user.id,
+        UsageSession.ended_at.is_(None)
+    ).first()
+
+    if not usage_sess:
+        return {"ok": False, "msg": "Session 不存在或已結束"}
+
+    now = datetime.utcnow()
+    usage_sess.ended_at = now
+
+    # NOTE: 使用 started_at 計算完整使用時長
+    duration = int((now - usage_sess.started_at).total_seconds())
+    usage_sess.duration_seconds = max(duration, 0)
+
+    user.total_usage_seconds = (user.total_usage_seconds or 0) + usage_sess.duration_seconds
+    user.last_active_at = now
+    db.commit()
+    return {"ok": True, "duration_seconds": usage_sess.duration_seconds}
 
 
 # ── Admin Endpoints ───────────────────────────────────────────────────────────
